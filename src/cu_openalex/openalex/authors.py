@@ -19,6 +19,8 @@ DEFAULT_AUTHOR_SELECT = [
     "display_name",
     "works_count",
     "cited_by_count",
+    "summary_stats",
+    "counts_by_year",
     "affiliations",
     "last_known_institutions",
     "updated_date",
