@@ -1,0 +1,47 @@
+[project]
+name = "cu-openalex"
+version = "0.1.0"
+description = "Prefect pipeline mining OpenAlex for CU Anschutz authors and their works into Parquet"
+readme = "README.md"
+authors = [
+    { name = "Sean Davis", email = "seandavi@gmail.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "duckdb>=1.5.3",
+    "fsspec>=2026.4.0",
+    "httpx>=0.28.1",
+    "polars>=1.41.2",
+    "prefect>=3.7.3",
+    "pyarrow>=24.0.0",
+    "pydantic-settings>=2.14.1",
+    "s3fs>=2026.4.0",
+    "tenacity>=9.1.4",
+    "universal-pathlib>=0.3.10",
+]
+
+[project.scripts]
+cu-openalex = "cu_openalex.flows.pipeline:main"
+
+[build-system]
+requires = ["uv_build>=0.8.11,<0.9.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "respx>=0.23.1",
+    "ruff>=0.15.15",
+]
+
+[tool.ruff]
+line-length = 100
+target-version = "py313"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

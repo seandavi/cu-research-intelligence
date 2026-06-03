@@ -1,0 +1,25 @@
+# Secrets / local config
+.env
+
+# Data landing pad (local backend) and DuckDB state
+/data/
+*.duckdb
+*.duckdb.wal
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+build/
+dist/
+
+# Prefect
+.prefect/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
