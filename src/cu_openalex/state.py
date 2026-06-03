@@ -96,7 +96,13 @@ def init_schema(con: duckdb.DuckDBPyConnection) -> None:
 @dataclass(frozen=True)
 class AuthorUpsertResult:
     total: int
-    dirty_ids: list[str]
+    new_ids: list[str]
+    changed_ids: list[str]
+
+    @property
+    def dirty_ids(self) -> list[str]:
+        """New + changed authors (those whose works may need (re)pulling)."""
+        return self.new_ids + self.changed_ids
 
 
 def upsert_authors(
@@ -105,25 +111,30 @@ def upsert_authors(
     *,
     run_date: _dt.date,
 ) -> AuthorUpsertResult:
-    """Upsert the normalized authors frame; return total + dirty (new/changed) ids.
+    """Upsert the normalized authors frame; classify rows as new vs changed.
 
-    Dirty = absent before, or ``updated_date`` / ``works_count`` changed. Dirty
-    detection runs *before* the upsert (compares incoming vs stored).
+    * **new** — author_id not present before this run.
+    * **changed** — present, but ``updated_date`` / ``works_count`` differs.
+
+    Detection runs *before* the upsert (compares incoming vs stored). New authors
+    matter to the works flow because their *historical* works may live in
+    snapshot partitions below the watermark (ADR-0006).
     """
     con.register("incoming_authors", frame.to_arrow())
-    dirty_ids = [
-        row[0]
-        for row in con.execute(
-            """
-            SELECT i.author_id
-            FROM incoming_authors i
-            LEFT JOIN authors a USING (author_id)
-            WHERE a.author_id IS NULL
-               OR a.updated_date IS DISTINCT FROM i.updated_date
-               OR a.works_count  IS DISTINCT FROM i.works_count
-            """
-        ).fetchall()
-    ]
+    classified = con.execute(
+        """
+        SELECT
+            i.author_id,
+            a.author_id IS NULL AS is_new
+        FROM incoming_authors i
+        LEFT JOIN authors a USING (author_id)
+        WHERE a.author_id IS NULL
+           OR a.updated_date IS DISTINCT FROM i.updated_date
+           OR a.works_count  IS DISTINCT FROM i.works_count
+        """
+    ).fetchall()
+    new_ids = [row[0] for row in classified if row[1]]
+    changed_ids = [row[0] for row in classified if not row[1]]
 
     con.execute(
         """
@@ -159,7 +170,12 @@ def upsert_authors(
     )
     con.unregister("incoming_authors")
     total = con.execute("SELECT count(*) FROM authors").fetchone()[0]
-    return AuthorUpsertResult(total=int(total), dirty_ids=dirty_ids)
+    return AuthorUpsertResult(total=int(total), new_ids=new_ids, changed_ids=changed_ids)
+
+
+def active_author_ids(con: duckdb.DuckDBPyConnection) -> list[str]:
+    """All author ids currently in the roster (the works-scan target set)."""
+    return [row[0] for row in con.execute("SELECT author_id FROM authors").fetchall()]
 
 
 def set_target_authors(con: duckdb.DuckDBPyConnection, author_ids: list[str]) -> None:
