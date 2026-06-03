@@ -12,7 +12,9 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 - [x] `snapshot.py` manifest parse + watermark selection + works scan SQL (+ tests)
 - [x] `state.py` DuckDB schema, author upsert/change-detection, works dedup, watermark, exports
 - [x] Prefect flows: authors, works, parent pipeline + CLI
-- [x] ADRs 0001–0009
+- [x] Enrich authors/works with metrics, grants, OA, topics (ADR-0010)
+- [x] Dimension flows: institutions, sources, funders, topics (ADR-0011)
+- [x] ADRs 0001–0011
 - [x] Unit + live integration tests passing
 
 ## Milestone 2 — Production hardening (todo)

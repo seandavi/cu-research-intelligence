@@ -91,7 +91,32 @@ Under `STORAGE_BASE_URI` (`file://./data` locally, `s3://bucket/prefix` for R2):
 openalex/authors/snapshot_date=YYYY-MM-DD/authors.parquet   # per-run snapshot
 openalex/authors/current/authors.parquet                    # merged roster
 openalex/works/publication_year=YYYY/*.parquet              # deduped works
+openalex/dimensions/{institutions,sources,funders,topics}/*.parquet  # reference dims
 state/state.duckdb                                          # local incremental state
+```
+
+### What's captured
+
+- **Authors**: identity + affiliations, plus metrics — `h_index`, `i10_index`,
+  `mean_citedness_2yr`, and `counts_by_year_json` (works/citations per year).
+- **Works**: identity + authorship, plus `fwci`, `is_oa`/`oa_status`,
+  `primary_topic` (topic/subfield/field/domain), `source_id`, **grants**
+  (`funder_ids` + full `grants_json`), and citation `counts_by_year_json`.
+  OpenAlex grant coverage is sparse — captured when present (ADR-0010).
+- **Dimensions** (built by `dimensions_flow`, joinable to the ids above):
+  institutions (ROR, geo, lineage, metrics), sources/journals (ISSN, OA, metrics),
+  funders (grants_count, metrics), topics (subfield/field/domain). **ADR-0011.**
+
+Build dimensions (small, stateless, safe to run alongside a backfill):
+
+```bash
+uv run python -m cu_openalex.flows.dimensions_flow            # all four
+duckdb -c "SELECT w.title, s.display_name AS journal, f.display_name AS funder
+  FROM 'data/openalex/works/**/*.parquet' w
+  LEFT JOIN 'data/openalex/dimensions/sources/sources.parquet' s USING (source_id)
+  LEFT JOIN 'data/openalex/dimensions/funders/funders.parquet' f
+    ON f.funder_id = w.funder_ids[1]
+  LIMIT 10"
 ```
 
 The DuckDB **state** DB is always local (a live DB over object storage isn't
