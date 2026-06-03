@@ -85,7 +85,9 @@ def parse_manifest(manifest: dict, *, bucket: str) -> list[ManifestEntry]:
     return sorted(entries, key=lambda e: (e.updated_date, e.s3_url))
 
 
-def fetch_manifest(entity: str = "works", *, settings: Settings | None = None) -> list[ManifestEntry]:
+def fetch_manifest(
+    entity: str = "works", *, settings: Settings | None = None
+) -> list[ManifestEntry]:
     """Fetch + parse the snapshot manifest for ``entity`` (default works)."""
     s = settings or get_settings()
     resp = httpx.get(manifest_url(entity, settings=s), timeout=60.0)
