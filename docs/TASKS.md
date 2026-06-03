@@ -14,7 +14,9 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 - [x] Prefect flows: authors, works, parent pipeline + CLI
 - [x] Enrich authors/works with metrics, grants, OA, topics (ADR-0010)
 - [x] Dimension flows: institutions, sources, funders, topics (ADR-0011)
-- [x] ADRs 0001–0011
+- [x] Raw (bronze) + curated (silver) layers; curate-from-raw / --curate-only (ADR-0012)
+- [x] Author name synonyms (`name_alternatives`); works `pmid`/`pmcid`
+- [x] ADRs 0001–0012
 - [x] Unit + live integration tests passing
 
 ## Milestone 2 — Production hardening (todo)

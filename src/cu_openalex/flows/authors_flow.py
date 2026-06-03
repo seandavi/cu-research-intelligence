@@ -1,8 +1,8 @@
-"""Prefect flow: discover CU-Anschutz authors and persist them.
+"""Prefect flow: discover CU-Anschutz authors, capture raw, then curate.
 
-Fetches authors from the OpenAlex API, applies the year-window filter, writes a
-per-run Parquet snapshot, and upserts the DuckDB roster (reporting new/changed
-authors). Returns the qualifying author-id set for the works flow.
+Fetches authors from the OpenAlex API, writes the verbatim records to the RAW
+layer (so the expensive fetch is captured once), then derives the curated roster
+(year-window filter + typed columns) and upserts the DuckDB roster.
 """
 
 from __future__ import annotations
@@ -11,10 +11,9 @@ import datetime as _dt
 
 from prefect import flow, get_run_logger, task
 
-from .. import state, storage
+from .. import state, storage, transform
 from ..config import Settings, get_settings
 from ..openalex.authors import fetch_authors
-from ..transform import authors_to_frame
 
 
 @task(retries=2, retry_delay_seconds=30)
@@ -29,28 +28,32 @@ async def authors_flow(
     run_date: _dt.date | None = None,
     settings: Settings | None = None,
 ) -> dict:
-    """Discover + persist CU-Anschutz authors. ``sample`` caps authors fetched."""
+    """Fetch + capture (raw) + curate CU-Anschutz authors. ``sample`` caps fetch."""
     log = get_run_logger()
     s = settings or get_settings()
     run_date = run_date or _dt.date.today()
 
-    raw = await _fetch_authors(sample, s)
-    frame = authors_to_frame(raw, settings=s, today=run_date)
-    log.info(
-        "fetched %d authors; %d pass the %d-year window (cutoff %d)",
-        len(raw),
-        frame.height,
-        s.year_window,
-        s.year_cutoff(run_date),
-    )
+    raw_authors = await _fetch_authors(sample, s)
 
-    snapshot_parquet = storage.write_polars(
-        frame,
+    # RAW layer: verbatim author records.
+    raw_parquet = storage.write_polars(
+        transform.raw_authors_frame(raw_authors),
         "openalex",
+        "raw",
         "authors",
         f"snapshot_date={run_date.isoformat()}",
         "authors.parquet",
         settings=s,
+    )
+
+    # CURATE: year-window filter + typed projection (from the same records).
+    frame = transform.authors_to_frame(raw_authors, settings=s, today=run_date)
+    log.info(
+        "fetched %d authors; %d pass the %d-year window (cutoff %d)",
+        len(raw_authors),
+        frame.height,
+        s.year_window,
+        s.year_cutoff(run_date),
     )
 
     con = storage.duckdb_connect(s)
@@ -69,7 +72,7 @@ async def authors_flow(
     )
     return {
         "run_date": run_date.isoformat(),
-        "snapshot_parquet": snapshot_parquet,
+        "raw_parquet": raw_parquet,
         "current_parquet": current_parquet,
         "roster_total": result.total,
         "qualifying_count": frame.height,

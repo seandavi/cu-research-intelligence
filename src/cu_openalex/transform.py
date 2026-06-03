@@ -63,6 +63,9 @@ def _author_row(author: dict, target_short: str) -> dict:
         "last_known_institution_id": short_id(primary.get("id")),
         "last_known_institution_name": primary.get("display_name"),
         "n_affiliations": len(author.get("affiliations", []) or []),
+        "name_alternatives": [
+            n for n in (author.get("display_name_alternatives") or []) if isinstance(n, str)
+        ],
         "h_index": stats.get("h_index"),
         "i10_index": stats.get("i10_index"),
         "mean_citedness_2yr": stats.get("2yr_mean_citedness"),
@@ -87,6 +90,7 @@ _SCHEMA = {
     "last_known_institution_id": pl.Utf8,
     "last_known_institution_name": pl.Utf8,
     "n_affiliations": pl.Int32,
+    "name_alternatives": pl.List(pl.Utf8),
     "h_index": pl.Int32,
     "i10_index": pl.Int32,
     "mean_citedness_2yr": pl.Float64,
@@ -122,3 +126,24 @@ def authors_to_frame(
 def author_ids(frame: pl.DataFrame) -> list[str]:
     """Short author ids from a normalized authors frame."""
     return frame.get_column("author_id").to_list()
+
+
+_RAW_AUTHOR_SCHEMA = {"author_id": pl.Utf8, "updated_date": pl.Utf8, "raw_json": pl.Utf8}
+
+
+def raw_authors_frame(raw_authors: list[dict]) -> pl.DataFrame:
+    """Frame for the RAW authors layer: each record's full JSON, verbatim."""
+    rows = [
+        {
+            "author_id": short_id(a.get("id")),
+            "updated_date": a.get("updated_date"),
+            "raw_json": json.dumps(a, separators=(",", ":")),
+        }
+        for a in raw_authors
+    ]
+    return pl.DataFrame(rows, schema=_RAW_AUTHOR_SCHEMA, orient="row")
+
+
+def read_raw_authors(frame: pl.DataFrame) -> list[dict]:
+    """Decode a raw authors frame back into OpenAlex author dicts (for re-curate)."""
+    return [json.loads(s) for s in frame.get_column("raw_json").to_list()]

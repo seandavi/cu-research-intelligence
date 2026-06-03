@@ -39,11 +39,12 @@ async def pipeline(
     *,
     sample: int | None = None,
     full_refresh: bool = False,
+    curate_only: bool = False,
     works_sample_parts: int | None = None,
     run_date: _dt.date | None = None,
     settings: Settings | None = None,
 ) -> dict:
-    """Run author discovery, then works ingestion for the qualifying authors."""
+    """Run author discovery, then works capture + curate for qualifying authors."""
     log = get_run_logger()
     s = settings or get_settings()
     run_date = run_date or _dt.date.today()
@@ -61,15 +62,16 @@ async def pipeline(
         works_flow,
         new_author_count=authors["new_count"],
         full_refresh=full_refresh,
+        curate_only=curate_only,
         sample_parts=sample_parts,
         run_date=run_date,
         settings=s,
     )
 
     log.info(
-        "pipeline complete: roster=%d authors, works table=%d",
+        "pipeline complete: roster=%d authors, curated works=%d",
         authors["roster_total"],
-        works["works_total"],
+        works["curated"],
     )
     return {"authors": authors, "works": works}
 
@@ -93,7 +95,12 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument(
         "--full-refresh",
         action="store_true",
-        help="ignore the works watermark and rescan all snapshot partitions",
+        help="ignore the works watermark and re-capture all snapshot partitions",
+    )
+    parser.add_argument(
+        "--curate-only",
+        action="store_true",
+        help="skip the snapshot scan; rebuild curated works from the existing raw layer",
     )
     parser.add_argument(
         "--serve",
@@ -127,6 +134,7 @@ def main(argv: list[str] | None = None) -> None:
             pipeline(
                 sample=args.sample,
                 full_refresh=args.full_refresh,
+                curate_only=args.curate_only,
                 works_sample_parts=args.works_sample_parts,
             )
         )
