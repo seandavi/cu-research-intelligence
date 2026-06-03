@@ -29,9 +29,14 @@ ADR-0011.
 
 - Grants/metrics arrive "for free" within the existing API + snapshot pulls; no
   extra endpoints for funding.
-- **Grant coverage is sparse and uneven** in OpenAlex (many works have empty
-  `grants`); captured-when-present, never assumed complete. `funder_ids` join to
-  the funders dimension.
+- **Grant coverage is effectively empty in OpenAlex right now.** Verified after
+  the full backfill: `grants` is unpopulated for all 1.17M CU works in the
+  snapshot, in the raw snapshot JSON, *and* via the live API (0/200 on global
+  recent works). This is an upstream data-availability gap, not a pipeline bug —
+  the `grants_json`/`funder_ids` columns and the funders dimension are wired and
+  will fill automatically if/when OpenAlex restores grant data. Until then,
+  funding analysis is not possible from this source. `funder_ids` join to the
+  funders dimension.
 - Widening the captured set later means re-running the works backfill (the
   snapshot scan schema is `WORKS_READ_COLUMNS`); chosen field set aims to avoid
   that.

@@ -19,8 +19,12 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 
 ## Milestone 2 — Production hardening (todo)
 
-- [ ] Run the first full works backfill (~639 GB streamed; long, unattended) and
-      record wall-clock + resulting row counts
+- [x] Run the first full works backfill — ~9.8 h, **1,166,681 deduped works**
+      across 18,904 authors; watermark 2026-03-30 (full coverage). Found + fixed
+      an OOM (mega-partition) and a Prefect 512 KB flow-param limit en route.
+- [ ] **Grants are empty upstream** (verified snapshot + API). If OpenAlex
+      restores grant data, re-run works (schema already captures `grants_json`/
+      `funder_ids`); optionally add an API grants top-up for funded works.
 - [ ] Schedule the monthly deployment (`--serve --cron "0 6 5 * *"`) on a host /
       worker; decide where the DuckDB state lives and how it's backed up
 - [ ] Cut over storage to Cloudflare R2: set `STORAGE_BASE_URI=s3://…` + `R2_*`,
