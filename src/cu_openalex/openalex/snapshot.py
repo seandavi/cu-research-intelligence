@@ -35,9 +35,16 @@ WORKS_READ_COLUMNS: dict[str, str] = {
     "language": "VARCHAR",
     "type": "VARCHAR",
     "cited_by_count": "BIGINT",
+    "fwci": "DOUBLE",
     "is_retracted": "BOOLEAN",
     "updated_date": "VARCHAR",
     "primary_location": "STRUCT(source STRUCT(id VARCHAR, display_name VARCHAR))",
+    "open_access": "STRUCT(is_oa BOOLEAN, oa_status VARCHAR)",
+    "primary_topic": "STRUCT(id VARCHAR, display_name VARCHAR, "
+    "subfield STRUCT(display_name VARCHAR), field STRUCT(display_name VARCHAR), "
+    "domain STRUCT(display_name VARCHAR))",
+    "grants": "STRUCT(funder VARCHAR, funder_display_name VARCHAR, award_id VARCHAR)[]",
+    "counts_by_year": "STRUCT(year INTEGER, cited_by_count BIGINT)[]",
     "authorships": "STRUCT(author STRUCT(id VARCHAR, display_name VARCHAR), "
     "institutions STRUCT(id VARCHAR, display_name VARCHAR)[])[]",
 }
@@ -152,9 +159,21 @@ SELECT
     raw.type,
     raw.language,
     raw.cited_by_count,
+    raw.fwci,
     raw.is_retracted,
     raw.updated_date,
     raw.primary_location.source.display_name                 AS source_name,
+    regexp_replace(raw.primary_location.source.id, '^.*/', '') AS source_id,
+    raw.open_access.is_oa                                    AS is_oa,
+    raw.open_access.oa_status                                AS oa_status,
+    regexp_replace(raw.primary_topic.id, '^.*/', '')         AS primary_topic_id,
+    raw.primary_topic.display_name                           AS primary_topic,
+    raw.primary_topic.subfield.display_name                  AS topic_subfield,
+    raw.primary_topic.field.display_name                     AS topic_field,
+    raw.primary_topic.domain.display_name                    AS topic_domain,
+    list_transform(raw.grants, g -> regexp_replace(g.funder, '^.*/', '')) AS funder_ids,
+    to_json(raw.grants)                                      AS grants_json,
+    to_json(raw.counts_by_year)                              AS citations_by_year_json,
     list_transform(raw.authorships, x -> regexp_replace(x.author.id, '^.*/', '')) AS all_author_ids,
     list_intersect(
         list_transform(raw.authorships, x -> regexp_replace(x.author.id, '^.*/', '')),

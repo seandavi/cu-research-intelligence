@@ -50,6 +50,7 @@ def _author_row(author: dict, target_short: str) -> dict:
     cu_years = _cu_years(author.get("affiliations", []), target_short)
     last_known = author.get("last_known_institutions") or []
     primary = last_known[0] if last_known else {}
+    stats = author.get("summary_stats") or {}
     return {
         "author_id": short_id(author.get("id")),
         "orcid": short_id(author.get("orcid")) if author.get("orcid") else author.get("orcid"),
@@ -62,9 +63,15 @@ def _author_row(author: dict, target_short: str) -> dict:
         "last_known_institution_id": short_id(primary.get("id")),
         "last_known_institution_name": primary.get("display_name"),
         "n_affiliations": len(author.get("affiliations", []) or []),
+        "h_index": stats.get("h_index"),
+        "i10_index": stats.get("i10_index"),
+        "mean_citedness_2yr": stats.get("2yr_mean_citedness"),
         "updated_date": author.get("updated_date"),
         "created_date": author.get("created_date"),
         "affiliations_json": json.dumps(author.get("affiliations", []), separators=(",", ":")),
+        "counts_by_year_json": json.dumps(
+            author.get("counts_by_year", []), separators=(",", ":")
+        ),
     }
 
 
@@ -80,9 +87,13 @@ _SCHEMA = {
     "last_known_institution_id": pl.Utf8,
     "last_known_institution_name": pl.Utf8,
     "n_affiliations": pl.Int32,
+    "h_index": pl.Int32,
+    "i10_index": pl.Int32,
+    "mean_citedness_2yr": pl.Float64,
     "updated_date": pl.Utf8,
     "created_date": pl.Utf8,
     "affiliations_json": pl.Utf8,
+    "counts_by_year_json": pl.Utf8,
 }
 
 
