@@ -210,8 +210,31 @@ def upsert_authors(
 
 
 def active_author_ids(con: duckdb.DuckDBPyConnection) -> list[str]:
-    """All author ids currently in the roster (the works-scan target set)."""
+    """All author ids currently in the roster."""
     return [row[0] for row in con.execute("SELECT author_id FROM authors").fetchall()]
+
+
+def qualifying_author_ids(con: duckdb.DuckDBPyConnection, cutoff: int) -> list[str]:
+    """Roster author ids meeting the year window (``max_cu_year >= cutoff``).
+
+    This is the works-scan target set. Loaded from state (not passed between
+    flows) because the list is large and Prefect caps flow parameters at 512 KB.
+    """
+    return [
+        row[0]
+        for row in con.execute(
+            "SELECT author_id FROM authors WHERE max_cu_year >= ?", [cutoff]
+        ).fetchall()
+    ]
+
+
+def count_new_authors(con: duckdb.DuckDBPyConnection, run_date: _dt.date) -> int:
+    """How many authors were first seen on ``run_date`` (for the backfill warning)."""
+    return int(
+        con.execute(
+            "SELECT count(*) FROM authors WHERE first_seen_run = ?", [run_date]
+        ).fetchone()[0]
+    )
 
 
 def set_target_authors(con: duckdb.DuckDBPyConnection, author_ids: list[str]) -> None:

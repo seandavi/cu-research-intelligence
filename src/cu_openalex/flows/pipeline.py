@@ -54,11 +54,11 @@ async def pipeline(
     if sample is not None and sample_parts is None:
         sample_parts = DEFAULT_SAMPLE_PARTS
 
-    # works_flow is sync (DuckDB/httpx); run off the event loop.
+    # works_flow is sync (DuckDB/httpx); run off the event loop. It loads the
+    # target authors from the roster itself (the list is too big to pass as a
+    # Prefect flow parameter — 512 KB cap).
     works = await asyncio.to_thread(
         works_flow,
-        authors["qualifying_author_ids"],
-        new_ids=authors["new_ids"],
         full_refresh=full_refresh,
         sample_parts=sample_parts,
         run_date=run_date,

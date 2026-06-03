@@ -24,15 +24,18 @@ def _smallest_parts(entries: list[snapshot.ManifestEntry], n: int) -> list[snaps
 
 @flow(name="openalex-works")
 def works_flow(
-    author_ids: list[str],
     *,
-    new_ids: list[str] | None = None,
+    author_ids: list[str] | None = None,
     full_refresh: bool = False,
     sample_parts: int | None = None,
     run_date: _dt.date | None = None,
     settings: Settings | None = None,
 ) -> dict:
-    """Ingest works for ``author_ids`` from the snapshot.
+    """Ingest works for the qualifying roster authors from the snapshot.
+
+    The target authors are loaded from the DuckDB roster (those meeting the year
+    window) rather than passed in — the list is large and Prefect caps flow
+    parameters at 512 KB. Pass ``author_ids`` to override (e.g. a targeted backfill).
 
     * ``full_refresh`` ignores the watermark (rescan all partitions × all authors)
       — use it to backfill authors added after the first run (ADR-0006).
@@ -42,15 +45,18 @@ def works_flow(
     log = get_run_logger()
     s = settings or get_settings()
     run_date = run_date or _dt.date.today()
-    new_ids = new_ids or []
-
-    if not author_ids:
-        log.warning("no target authors; skipping works ingest")
-        return {"partitions": 0, "ingested": 0, "works_total": 0, "watermark": None}
 
     con = storage.duckdb_connect(s)
     try:
         state.init_schema(con)
+        if author_ids is None:
+            author_ids = state.qualifying_author_ids(con, s.year_cutoff(run_date))
+        new_author_count = state.count_new_authors(con, run_date)
+
+        if not author_ids:
+            log.warning("no target authors in roster; skipping works ingest")
+            return {"partitions": 0, "ingested": 0, "works_total": 0, "watermark": None}
+
         entries = snapshot.fetch_manifest("works", settings=s)
         is_sample = sample_parts is not None
 
@@ -67,11 +73,11 @@ def works_flow(
                 watermark,
                 full_refresh,
             )
-            if new_ids and watermark is not None and not full_refresh:
+            if new_author_count and watermark is not None and not full_refresh:
                 log.warning(
                     "%d new authors this run: their pre-watermark history is NOT "
                     "scanned. Re-run with full_refresh=True to backfill them.",
-                    len(new_ids),
+                    new_author_count,
                 )
 
         if not selected:

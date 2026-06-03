@@ -14,7 +14,7 @@ from prefect import flow, get_run_logger, task
 from .. import state, storage
 from ..config import Settings, get_settings
 from ..openalex.authors import fetch_authors
-from ..transform import author_ids, authors_to_frame
+from ..transform import authors_to_frame
 
 
 @task(retries=2, retry_delay_seconds=30)
@@ -72,7 +72,7 @@ async def authors_flow(
         "snapshot_parquet": snapshot_parquet,
         "current_parquet": current_parquet,
         "roster_total": result.total,
-        "qualifying_author_ids": author_ids(frame),
-        "new_ids": result.new_ids,
-        "changed_ids": result.changed_ids,
+        "qualifying_count": frame.height,
+        "new_count": len(result.new_ids),
+        "changed_count": len(result.changed_ids),
     }

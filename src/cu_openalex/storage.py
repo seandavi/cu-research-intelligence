@@ -115,8 +115,14 @@ def state_db_path(settings: Settings | None = None) -> Path:
     return path
 
 
-def duckdb_connect(settings: Settings | None = None) -> duckdb.DuckDBPyConnection:
-    """Open the DuckDB state DB with httpfs configured for snapshot + R2 access.
+def duckdb_connect(
+    settings: Settings | None = None, *, database: str | None = None
+) -> duckdb.DuckDBPyConnection:
+    """Open a DuckDB connection with httpfs configured for snapshot + R2 access.
+
+    ``database`` defaults to the local state DB. Pass ``":memory:"`` for stateless
+    work (e.g. dimension builds) so it never contends with the state DB's write
+    lock — important while a long backfill holds that lock.
 
     * ``httpfs`` is loaded so DuckDB can stream the OpenAlex snapshot over HTTPS
       (anonymous, unsigned — we use ``https://openalex.s3.amazonaws.com/...``
@@ -125,7 +131,7 @@ def duckdb_connect(settings: Settings | None = None) -> duckdb.DuckDBPyConnectio
       ``COPY ... TO 's3://...'`` can write outputs.
     """
     s = settings or get_settings()
-    con = duckdb.connect(str(state_db_path(s)))
+    con = duckdb.connect(database or str(state_db_path(s)))
     con.execute("INSTALL httpfs; LOAD httpfs;")
     if s.writes_to_r2 and s.r2_endpoint_url and s.r2_access_key_id:
         endpoint = urlparse(s.r2_endpoint_url).netloc or s.r2_endpoint_url
