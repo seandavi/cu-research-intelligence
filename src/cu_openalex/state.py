@@ -21,8 +21,8 @@ from dataclasses import dataclass
 import duckdb
 import polars as pl
 
-from .config import Settings, get_settings
 from . import storage
+from .config import Settings
 
 # Works columns, in the order produced by snapshot.works_scan_sql (+ ingested_run).
 _WORKS_COLUMNS = [
