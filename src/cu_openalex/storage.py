@@ -60,6 +60,54 @@ def parquet_target(*parts: str, settings: Settings | None = None) -> str:
     raise ValueError(f"Unsupported storage_base_uri scheme: {base!r}")
 
 
+def dataset_has_files(*parts: str, settings: Settings | None = None) -> bool:
+    """True if any ``*.parquet`` exists under the dataset directory at ``parts``."""
+    base = _base(settings)
+    suffix = "/".join(p.strip("/") for p in parts)
+    if base.startswith("file://"):
+        root = _local_root(base) / suffix
+        return root.exists() and next(root.rglob("*.parquet"), None) is not None
+    if base.startswith("s3://"):
+        import fsspec
+
+        s = settings or get_settings()
+        opts: dict = {}
+        if s.r2_access_key_id and s.r2_secret_access_key:
+            opts = {"key": s.r2_access_key_id, "secret": s.r2_secret_access_key}
+        if s.r2_endpoint_url:
+            opts["client_kwargs"] = {"endpoint_url": s.r2_endpoint_url}
+        fs = fsspec.filesystem("s3", **opts)
+        return bool(fs.glob(f"{base[len('s3://'):]}/{suffix}/**/*.parquet"))
+    raise ValueError(f"Unsupported storage_base_uri scheme: {base!r}")
+
+
+def clear_dataset(*parts: str, settings: Settings | None = None) -> None:
+    """Recursively remove the dataset directory at ``parts`` (for clean rebuilds)."""
+    base = _base(settings)
+    suffix = "/".join(p.strip("/") for p in parts)
+    if base.startswith("file://"):
+        import shutil
+
+        target = _local_root(base) / suffix
+        if target.exists():
+            shutil.rmtree(target)
+    elif base.startswith("s3://"):
+        import fsspec
+
+        s = settings or get_settings()
+        opts: dict[str, str] = {}
+        if s.r2_access_key_id and s.r2_secret_access_key:
+            opts = {"key": s.r2_access_key_id, "secret": s.r2_secret_access_key}
+        if s.r2_endpoint_url:
+            opts["client_kwargs"] = {"endpoint_url": s.r2_endpoint_url}  # type: ignore[assignment]
+        fs = fsspec.filesystem("s3", **opts)
+        path = f"{base[len('s3://'):]}/{suffix}"
+        if fs.exists(path):
+            fs.rm(path, recursive=True)
+    else:
+        raise ValueError(f"Unsupported storage_base_uri scheme: {base!r}")
+
+
 def polars_storage_options(settings: Settings | None = None) -> dict[str, str] | None:
     """Polars/object-store credentials for the landing pad, or None when local."""
     s = settings or get_settings()

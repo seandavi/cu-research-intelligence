@@ -1,8 +1,14 @@
-"""Prefect flow: pull works for the target authors from the OpenAlex snapshot.
+"""Prefect flow: capture raw works from the snapshot, then curate.
 
-Watermark-driven and partition-grouped for resumable backfills/incrementals.
-Streams gzipped JSON from S3 via DuckDB, filters to the author set, dedups on
-``work_id``, advances the watermark per date-group, and exports Parquet.
+Two phases:
+
+* **RAW ingest** (expensive, watermark-driven): stream snapshot parts, filter to
+  the roster, and write each record verbatim to ``raw/works/updated_date=…``.
+  Scans one part-file at a time (bounded memory) and advances the watermark per
+  date — resumable.
+* **CURATE** (cheap, repeatable): rebuild the curated works parquet from the raw
+  layer (dedup on work_id + typed projection). ``curate_only=True`` skips the
+  scan entirely — re-transform without re-fetching (ADR-0012).
 """
 
 from __future__ import annotations
@@ -22,27 +28,22 @@ def _smallest_parts(entries: list[snapshot.ManifestEntry], n: int) -> list[snaps
     return sorted(entries, key=lambda e: e.record_count)[:n]
 
 
+def _part_stem(entry: snapshot.ManifestEntry) -> str:
+    """``…/part_0007.gz`` -> ``part_0007`` (filename for the raw parquet)."""
+    return entry.https_url.rsplit("/", 1)[-1].removesuffix(".gz")
+
+
 @flow(name="openalex-works")
 def works_flow(
     *,
-    author_ids: list[str] | None = None,
-    new_author_count: int | None = None,
     full_refresh: bool = False,
     sample_parts: int | None = None,
+    curate_only: bool = False,
+    new_author_count: int | None = None,
     run_date: _dt.date | None = None,
     settings: Settings | None = None,
 ) -> dict:
-    """Ingest works for the qualifying roster authors from the snapshot.
-
-    The target authors are loaded from the DuckDB roster (those meeting the year
-    window) rather than passed in — the list is large and Prefect caps flow
-    parameters at 512 KB. Pass ``author_ids`` to override (e.g. a targeted backfill).
-
-    * ``full_refresh`` ignores the watermark (rescan all partitions × all authors)
-      — use it to backfill authors added after the first run (ADR-0006).
-    * ``sample_parts`` scans only the N smallest part files and does **not**
-      advance the watermark — a fast smoke test, not a real ingest.
-    """
+    """Capture raw works (unless ``curate_only``) then rebuild curated works."""
     log = get_run_logger()
     s = settings or get_settings()
     run_date = run_date or _dt.date.today()
@@ -50,93 +51,94 @@ def works_flow(
     con = storage.duckdb_connect(s)
     try:
         state.init_schema(con)
-        if author_ids is None:
-            author_ids = state.qualifying_author_ids(con, s.year_cutoff(run_date))
-        # Prefer the accurate count from the authors upsert (passed by the
-        # pipeline). The state fallback (first_seen_run = today) over-counts on a
-        # same-day resume, since the initial run stamped today on every author.
+        author_ids = state.qualifying_author_ids(con, s.year_cutoff(run_date))
         if new_author_count is None:
             new_author_count = state.count_new_authors(con, run_date)
-
         if not author_ids:
-            log.warning("no target authors in roster; skipping works ingest")
-            return {"partitions": 0, "ingested": 0, "works_total": 0, "watermark": None}
-
-        entries = snapshot.fetch_manifest("works", settings=s)
-        is_sample = sample_parts is not None
-
-        if is_sample:
-            selected = _smallest_parts(entries, sample_parts)
-            log.info("SAMPLE: scanning %d smallest part files (watermark untouched)", len(selected))
-        else:
-            watermark = None if full_refresh else state.get_watermark(con, "works")
-            selected = snapshot.select_partitions(entries, since=watermark)
-            log.info(
-                "%d/%d partitions to scan (watermark=%s, full_refresh=%s)",
-                len(selected),
-                len(entries),
-                watermark,
-                full_refresh,
-            )
-            if new_author_count and watermark is not None and not full_refresh:
-                log.warning(
-                    "%d new authors this run: their pre-watermark history is NOT "
-                    "scanned. Re-run with full_refresh=True to backfill them.",
-                    new_author_count,
-                )
-
-        if not selected:
-            wm = state.get_watermark(con, "works")
-            log.info("works up to date; nothing to scan (watermark=%s)", wm)
-            works_total = con.execute("SELECT count(*) FROM works").fetchone()[0]
-            return {"partitions": 0, "ingested": 0, "works_total": works_total, "watermark": wm}
-
+            log.warning("no target authors in roster; skipping works")
+            return {"partitions": 0, "raw_captured": 0, "curated": 0, "watermark": None}
         state.set_target_authors(con, author_ids)
-        ingested = 0
 
-        if is_sample:
-            urls = [e.https_url for e in selected]
-            ingested = state.ingest_works(con, snapshot.works_scan_sql(urls), run_date=run_date)
-        else:
-            # Group by date for resumability (watermark advances per date), but
-            # scan ONE part-file at a time to bound memory — a single date can
-            # hold several ~1 GB parts, and scanning them together can OOM.
-            for day, group in groupby(selected, key=lambda e: e.updated_date):
-                parts = list(group)
-                day_total = 0
-                for i, part in enumerate(parts, 1):
-                    n = state.ingest_works(
-                        con, snapshot.works_scan_sql([part.https_url]), run_date=run_date
-                    )
-                    day_total += n
-                    if len(parts) > 1:
-                        log.info("    %s part %d/%d -> %d works", day, i, len(parts), n)
-                state.set_watermark(con, "works", day)
-                ingested += day_total
+        partitions = 0
+        raw_captured = 0
+        if not curate_only:
+            entries = snapshot.fetch_manifest("works", settings=s)
+            if sample_parts is not None:
+                selected = _smallest_parts(entries, sample_parts)
+                log.info("SAMPLE: capturing %d smallest parts (watermark untouched)", len(selected))
+            else:
+                watermark = None if full_refresh else state.get_watermark(con, "works")
+                selected = snapshot.select_partitions(entries, since=watermark)
                 log.info(
-                    "  %s: %d parts -> %d works (running total %d)",
-                    day,
-                    len(parts),
-                    day_total,
-                    ingested,
+                    "%d/%d partitions to capture (watermark=%s, full_refresh=%s)",
+                    len(selected),
+                    len(entries),
+                    watermark,
+                    full_refresh,
                 )
+                if new_author_count and watermark is not None and not full_refresh:
+                    log.warning(
+                        "%d new authors: their pre-watermark history is NOT captured. "
+                        "Re-run with full_refresh=True to backfill them.",
+                        new_author_count,
+                    )
+            partitions = len(selected)
 
-        works_parquet = state.export_works_parquet(con, settings=s)
-        works_total = con.execute("SELECT count(*) FROM works").fetchone()[0]
+            if sample_parts is not None:
+                for part in selected:
+                    raw_captured += state.ingest_raw_works_part(
+                        con,
+                        part.https_url,
+                        updated_date=part.updated_date.isoformat(),
+                        part_stem=_part_stem(part),
+                        settings=s,
+                    )
+            else:
+                # One part at a time; advance the watermark once per date.
+                for day, group in groupby(selected, key=lambda e: e.updated_date):
+                    parts = list(group)
+                    day_total = 0
+                    for i, part in enumerate(parts, 1):
+                        n = state.ingest_raw_works_part(
+                            con,
+                            part.https_url,
+                            updated_date=day.isoformat(),
+                            part_stem=_part_stem(part),
+                            settings=s,
+                        )
+                        day_total += n
+                        if len(parts) > 1:
+                            log.info("    %s part %d/%d -> %d raw works", day, i, len(parts), n)
+                    state.set_watermark(con, "works", day)
+                    raw_captured += day_total
+                    log.info(
+                        "  %s: %d parts -> %d raw works (running total %d)",
+                        day,
+                        len(parts),
+                        day_total,
+                        raw_captured,
+                    )
+
+        # CURATE from the raw layer (full rebuild).
+        if not storage.dataset_has_files("openalex", "raw", "works", settings=s):
+            log.warning("raw works layer is empty; nothing to curate")
+            curated_parquet, curated = None, 0
+        else:
+            curated_parquet, curated = state.curate_works(con, settings=s)
         final_wm = state.get_watermark(con, "works")
     finally:
         con.close()
 
     log.info(
-        "ingested %d work rows this run; table now holds %d works; watermark=%s",
-        ingested,
-        works_total,
+        "raw captured this run=%d; curated works=%d; watermark=%s",
+        raw_captured,
+        curated,
         final_wm,
     )
     return {
-        "partitions": len(selected),
-        "ingested": ingested,
-        "works_total": works_total,
+        "partitions": partitions,
+        "raw_captured": raw_captured,
+        "curated": curated,
+        "curated_parquet": curated_parquet,
         "watermark": final_wm.isoformat() if final_wm else None,
-        "works_parquet": works_parquet,
     }

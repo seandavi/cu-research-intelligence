@@ -88,21 +88,38 @@ see `.env.example`. Key ones:
 Under `STORAGE_BASE_URI` (`file://./data` locally, `s3://bucket/prefix` for R2):
 
 ```
-openalex/authors/snapshot_date=YYYY-MM-DD/authors.parquet   # per-run snapshot
-openalex/authors/current/authors.parquet                    # merged roster
-openalex/works/publication_year=YYYY/*.parquet              # deduped works
+openalex/raw/authors/snapshot_date=YYYY-MM-DD/authors.parquet   # bronze: verbatim API records
+openalex/raw/works/updated_date=YYYY-MM-DD/*.parquet            # bronze: verbatim snapshot records
+openalex/authors/current/authors.parquet                       # silver: curated roster
+openalex/works/publication_year=YYYY/*.parquet                 # silver: curated, deduped works
 openalex/dimensions/{institutions,sources,funders,topics}/*.parquet  # reference dims
-state/state.duckdb                                          # local incremental state
+state/state.duckdb                                             # local roster + watermark
 ```
+
+### Raw (bronze) → curated (silver)
+
+The expensive fetch is captured **verbatim** to the raw layer first (`raw_json`
+per record), and the curated tables are **derived from raw** (ADR-0012). So
+re-transforming, fixing a parse, or adding a field is a cheap offline re-curate —
+no API/snapshot re-fetch:
+
+```bash
+uv run python -m cu_openalex.flows.pipeline --curate-only   # rebuild curated from raw
+```
+
+The works watermark governs raw capture; `--full-refresh` re-captures all partitions.
 
 ### What's captured
 
-- **Authors**: identity + affiliations, plus metrics — `h_index`, `i10_index`,
-  `mean_citedness_2yr`, and `counts_by_year_json` (works/citations per year).
-- **Works**: identity + authorship, plus `fwci`, `is_oa`/`oa_status`,
-  `primary_topic` (topic/subfield/field/domain), `source_id`, **grants**
-  (`funder_ids` + full `grants_json`), and citation `counts_by_year_json`.
-  OpenAlex grant coverage is sparse — captured when present (ADR-0010).
+- **Authors**: identity + affiliations + **name synonyms** (`name_alternatives`,
+  for cross-database matching), plus metrics — `h_index`, `i10_index`,
+  `mean_citedness_2yr`, `counts_by_year_json`.
+- **Works**: identity + authorship + **`pmid`/`pmcid`** (when present) + `doi`,
+  plus `fwci`, `is_oa`/`oa_status`, `primary_topic` (topic/subfield/field/domain),
+  `source_id`, **grants** (`funder_ids` + `grants_json`), and citation
+  `counts_by_year_json`. OpenAlex grant coverage is currently empty upstream —
+  captured when present (ADR-0010). Anything not in the curated projection still
+  lives verbatim in the raw layer.
 - **Dimensions** (built by `dimensions_flow`, joinable to the ids above):
   institutions (ROR, geo, lineage, metrics), sources/journals (ISSN, OA, metrics),
   funders (grants_count, metrics), topics (subfield/field/domain). **ADR-0011.**

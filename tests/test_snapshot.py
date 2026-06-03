@@ -10,7 +10,8 @@ from cu_openalex.openalex.snapshot import (
     parse_manifest,
     s3_to_https,
     select_partitions,
-    works_scan_sql,
+    works_curate_sql,
+    works_raw_scan_sql,
 )
 
 BUCKET = "openalex"
@@ -73,13 +74,22 @@ def test_latest_updated_date():
     assert latest_updated_date([]) is None
 
 
-def test_works_scan_sql_embeds_urls_and_join():
+def test_works_raw_scan_sql_embeds_urls_and_filter():
     urls = ["https://openalex.s3.amazonaws.com/data/works/updated_date=2026-03-31/part_0000.gz"]
-    sql = works_scan_sql(urls, target_table="target_authors")
+    sql = works_raw_scan_sql(urls, target_table="target_authors")
     assert urls[0] in sql
     assert "target_authors" in sql
     assert "list_has_any" in sql
-    assert "read_json" in sql
+    assert "read_json_objects" in sql
+    assert "raw_json" in sql
+
+
+def test_works_curate_sql_dedups_and_projects():
+    sql = works_curate_sql("data/openalex/raw/works/**/*.parquet", target_table="target_authors")
+    assert "row_number() OVER (PARTITION BY work_id ORDER BY updated_date DESC)" in sql
+    assert "from_json(raw_json" in sql
+    assert "AS pmid" in sql and "AS pmcid" in sql
+    assert "cu_author_ids" in sql
 
 
 def test_manifest_entry_is_frozen():

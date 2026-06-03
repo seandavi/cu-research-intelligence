@@ -7,7 +7,6 @@ authorships, filter to a target author, and dedup — against live OpenAlex data
 
 from __future__ import annotations
 
-import datetime as _dt
 import os
 
 import pytest
@@ -25,29 +24,37 @@ pytestmark = pytest.mark.skipif(
 PART = "https://openalex.s3.amazonaws.com/data/works/updated_date=2016-06-24/part_0000.gz"
 
 
-def test_works_scan_filters_to_target_author(tmp_path):
+def test_raw_capture_then_curate(tmp_path):
     settings = Settings(storage_base_uri=f"file://{tmp_path}", api_key=None)
     con = storage.duckdb_connect(settings)
     try:
         state.init_schema(con)
         # Derive a (work_id, author short id) pair that exists in this partition.
+        aid_path = "$.authorships[0].author.id"
         work_id, author_id = con.execute(
-            f"SELECT regexp_replace(id, '^.*/', ''), "
-            f"       regexp_replace(authorships[1].author.id, '^.*/', '') "
-            f"FROM {snapshot._read_json_call([PART])} "
-            f"WHERE len(authorships) > 0 AND authorships[1].author.id IS NOT NULL LIMIT 1"
+            f"SELECT regexp_replace(json_extract_string(o.json,'$.id'),'^.*/',''), "
+            f"       regexp_replace(json_extract_string(o.json,'{aid_path}'),'^.*/','') "
+            f"FROM {snapshot._objects_read_call([PART])} o "
+            f"WHERE json_extract(o.json,'{aid_path}') IS NOT NULL LIMIT 1"
         ).fetchone()
 
         state.set_target_authors(con, [author_id])
-        ingested = state.ingest_works(
-            con, snapshot.works_scan_sql([PART]), run_date=_dt.date(2026, 1, 1)
+        # RAW capture this part, then CURATE from the raw parquet.
+        captured = state.ingest_raw_works_part(
+            con, PART, updated_date="2016-06-24", part_stem="part_0000", settings=settings
         )
-        assert ingested >= 1
+        assert captured >= 1
+        assert storage.dataset_has_files("openalex", "raw", "works", settings=settings)
+
+        target, curated = state.curate_works(con, settings=settings)
+        assert curated >= 1
 
         row = con.execute(
-            "SELECT work_id, cu_author_ids FROM works WHERE work_id = ?", [work_id]
+            f"SELECT work_id, cu_author_ids FROM read_parquet('{target}/**/*.parquet') "
+            "WHERE work_id = ?",
+            [work_id],
         ).fetchone()
-        assert row is not None, "the sampled work should match its own author"
+        assert row is not None, "the sampled work should survive raw->curate"
         assert author_id in row[1]
     finally:
         con.close()

@@ -1,16 +1,15 @@
-"""DuckDB state layer: author upsert + change detection, works upsert, watermark.
+"""DuckDB state layer: author roster, watermark, and raw→curated works.
 
-The DuckDB database is the local system-of-record for incremental state (it stays
-local — ADR-0003). It holds:
+The DuckDB database is the local system-of-record for *small* incremental state
+(it stays local — ADR-0003). It holds:
 
 * ``authors`` — current author roster, keyed on ``author_id``, with first/last
-  seen run dates. Re-running upserts and reports which authors are *dirty* (new
-  or changed) so the works flow only re-pulls those.
-* ``works`` — deduped works keyed on ``work_id`` (a work shared by two CU authors
-  exists once). Incremental scans ``INSERT OR REPLACE`` here.
-* ``snapshot_state`` — the per-entity watermark (max ``updated_date`` ingested).
+  seen run dates and new/changed detection.
+* ``snapshot_state`` — the per-entity watermark (max ``updated_date`` captured).
 
-Parquet outputs are *exports* from these tables to the landing pad (local or R2).
+Works are NOT stored in DuckDB. They live as parquet in two layers (ADR-0012):
+the RAW layer (verbatim records, watermark-driven capture) and the CURATED layer
+(typed projection, rebuilt from raw). This module writes both via DuckDB ``COPY``.
 """
 
 from __future__ import annotations
@@ -22,37 +21,8 @@ import duckdb
 import polars as pl
 
 from . import storage
-from .config import Settings
-
-# Works columns, in the order produced by snapshot.works_scan_sql (+ ingested_run).
-_WORKS_COLUMNS = [
-    "work_id",
-    "doi",
-    "title",
-    "publication_year",
-    "publication_date",
-    "type",
-    "language",
-    "cited_by_count",
-    "fwci",
-    "is_retracted",
-    "updated_date",
-    "source_name",
-    "source_id",
-    "is_oa",
-    "oa_status",
-    "primary_topic_id",
-    "primary_topic",
-    "topic_subfield",
-    "topic_field",
-    "topic_domain",
-    "funder_ids",
-    "grants_json",
-    "citations_by_year_json",
-    "all_author_ids",
-    "cu_author_ids",
-    "authorships_json",
-]
+from .config import Settings, get_settings
+from .openalex import snapshot
 
 
 def init_schema(con: duckdb.DuckDBPyConnection) -> None:
@@ -71,6 +41,7 @@ def init_schema(con: duckdb.DuckDBPyConnection) -> None:
             last_known_institution_id VARCHAR,
             last_known_institution_name VARCHAR,
             n_affiliations INTEGER,
+            name_alternatives VARCHAR[],
             h_index INTEGER,
             i10_index INTEGER,
             mean_citedness_2yr DOUBLE,
@@ -82,35 +53,9 @@ def init_schema(con: duckdb.DuckDBPyConnection) -> None:
             last_seen_run DATE
         );
 
-        CREATE TABLE IF NOT EXISTS works (
-            work_id VARCHAR PRIMARY KEY,
-            doi VARCHAR,
-            title VARCHAR,
-            publication_year INTEGER,
-            publication_date VARCHAR,
-            type VARCHAR,
-            language VARCHAR,
-            cited_by_count BIGINT,
-            fwci DOUBLE,
-            is_retracted BOOLEAN,
-            updated_date VARCHAR,
-            source_name VARCHAR,
-            source_id VARCHAR,
-            is_oa BOOLEAN,
-            oa_status VARCHAR,
-            primary_topic_id VARCHAR,
-            primary_topic VARCHAR,
-            topic_subfield VARCHAR,
-            topic_field VARCHAR,
-            topic_domain VARCHAR,
-            funder_ids VARCHAR[],
-            grants_json JSON,
-            citations_by_year_json JSON,
-            all_author_ids VARCHAR[],
-            cu_author_ids VARCHAR[],
-            authorships_json JSON,
-            ingested_run DATE
-        );
+        -- Works moved to the raw/curated parquet layers (ADR-0012); drop the
+        -- legacy in-DB works table to reclaim space from older state files.
+        DROP TABLE IF EXISTS works;
 
         CREATE TABLE IF NOT EXISTS snapshot_state (
             entity VARCHAR PRIMARY KEY,
@@ -170,7 +115,7 @@ def upsert_authors(
             author_id, orcid, display_name, works_count, cited_by_count,
             cu_anschutz_years, max_cu_year, is_current_cu,
             last_known_institution_id, last_known_institution_name, n_affiliations,
-            h_index, i10_index, mean_citedness_2yr,
+            name_alternatives, h_index, i10_index, mean_citedness_2yr,
             updated_date, created_date, affiliations_json, counts_by_year_json,
             first_seen_run, last_seen_run
         )
@@ -178,7 +123,7 @@ def upsert_authors(
             author_id, orcid, display_name, works_count, cited_by_count,
             cu_anschutz_years, max_cu_year, is_current_cu,
             last_known_institution_id, last_known_institution_name, n_affiliations,
-            h_index, i10_index, mean_citedness_2yr,
+            name_alternatives, h_index, i10_index, mean_citedness_2yr,
             updated_date, created_date, affiliations_json, counts_by_year_json,
             $run, $run
         FROM incoming_authors
@@ -193,6 +138,7 @@ def upsert_authors(
             last_known_institution_id = excluded.last_known_institution_id,
             last_known_institution_name = excluded.last_known_institution_name,
             n_affiliations = excluded.n_affiliations,
+            name_alternatives = excluded.name_alternatives,
             h_index = excluded.h_index,
             i10_index = excluded.i10_index,
             mean_citedness_2yr = excluded.mean_citedness_2yr,
@@ -244,27 +190,60 @@ def set_target_authors(con: duckdb.DuckDBPyConnection, author_ids: list[str]) ->
         con.executemany("INSERT INTO target_authors VALUES (?)", [(a,) for a in author_ids])
 
 
-def ingest_works(
+def ingest_raw_works_part(
     con: duckdb.DuckDBPyConnection,
-    scan_sql: str,
+    part_url: str,
     *,
-    run_date: _dt.date,
+    updated_date: str,
+    part_stem: str,
+    settings: Settings | None = None,
 ) -> int:
-    """Run the snapshot scan and ``INSERT OR REPLACE`` results into ``works``.
+    """RAW capture: write one snapshot part's CU records verbatim to parquet.
 
-    Requires ``target_authors`` to exist (see :func:`set_target_authors`).
-    Returns the number of work rows ingested this call.
+    Output: ``raw/works/updated_date=<date>/<part_stem>.parquet`` with columns
+    ``work_id, updated_date, raw_json``. Requires ``target_authors``. Skips
+    writing a file when the part has no CU works. Returns rows captured.
     """
-    con.execute(f"CREATE OR REPLACE TEMP TABLE _scan AS {scan_sql}")
-    n = con.execute("SELECT count(*) FROM _scan").fetchone()[0]
-    cols = ", ".join(_WORKS_COLUMNS)
     con.execute(
-        f"INSERT OR REPLACE INTO works ({cols}, ingested_run) "
-        f"SELECT {cols}, $run FROM _scan",
-        {"run": run_date},
+        f"CREATE OR REPLACE TEMP TABLE _raw AS {snapshot.works_raw_scan_sql([part_url])}"
     )
-    con.execute("DROP TABLE IF EXISTS _scan")
-    return int(n)
+    n = int(con.execute("SELECT count(*) FROM _raw").fetchone()[0])
+    if n:
+        target = storage.parquet_target(
+            "openalex",
+            "raw",
+            "works",
+            f"updated_date={updated_date}",
+            f"{part_stem}.parquet",
+            settings=settings,
+        )
+        con.execute(f"COPY _raw TO '{target}' (FORMAT parquet)")
+    con.execute("DROP TABLE IF EXISTS _raw")
+    return n
+
+
+def raw_works_glob(settings: Settings | None = None) -> str:
+    """Glob over the raw works parquet layer."""
+    root = storage.parquet_target("openalex", "raw", "works", settings=settings)
+    return f"{root}/**/*.parquet"
+
+
+def curate_works(
+    con: duckdb.DuckDBPyConnection, *, settings: Settings | None = None
+) -> tuple[str, int]:
+    """Rebuild curated works parquet from the raw layer (dedup + typed projection).
+
+    Requires ``target_authors``. Returns ``(target_dir, row_count)``.
+    """
+    s = settings or get_settings()
+    target = storage.parquet_target("openalex", "works", settings=s)
+    storage.clear_dataset("openalex", "works", settings=s)
+    sql = snapshot.works_curate_sql(raw_works_glob(s))
+    con.execute(
+        f"COPY ({sql}) TO '{target}' (FORMAT parquet, PARTITION_BY (publication_year))"
+    )
+    n = con.execute(f"SELECT count(*) FROM read_parquet('{target}/**/*.parquet')").fetchone()[0]
+    return target, int(n)
 
 
 def get_watermark(con: duckdb.DuckDBPyConnection, entity: str) -> _dt.date | None:
@@ -305,17 +284,5 @@ def export_authors_parquet(
     con.execute(
         f"COPY (SELECT * FROM authors ORDER BY max_cu_year DESC, works_count DESC) "
         f"TO '{target}' (FORMAT parquet)"
-    )
-    return target
-
-
-def export_works_parquet(
-    con: duckdb.DuckDBPyConnection, *, settings: Settings | None = None
-) -> str:
-    """Export deduped works to ``works/`` Hive-partitioned by publication year."""
-    target = storage.parquet_target("openalex", "works", settings=settings)
-    con.execute(
-        f"COPY (SELECT * FROM works) TO '{target}' "
-        "(FORMAT parquet, PARTITION_BY (publication_year), OVERWRITE_OR_IGNORE)"
     )
     return target

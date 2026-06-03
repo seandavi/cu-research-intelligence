@@ -13,6 +13,7 @@ Execution happens in the works flow against a DuckDB connection.
 from __future__ import annotations
 
 import datetime as _dt
+import json
 import re
 from dataclasses import dataclass
 
@@ -22,13 +23,15 @@ from ..config import Settings, get_settings
 
 _UPDATED_DATE_RE = re.compile(r"updated_date=(\d{4}-\d{2}-\d{2})")
 
-# Subset of the works schema we parse from the snapshot JSON. Listing columns
-# (a) bounds parsing cost/memory and (b) lets us keep authorships as a typed
-# struct list so we can match author ids with a list expression. Unlisted JSON
-# fields (e.g. abstract_inverted_index, referenced_works) are skipped.
-WORKS_READ_COLUMNS: dict[str, str] = {
+# The curated projection schema, as a `from_json` template (nested = struct,
+# [..] = list, leaf = DuckDB type). The RAW layer stores each record's full JSON
+# verbatim; the curated layer re-parses it with this template, which extracts
+# only these fields and ignores everything else. To capture more fields later,
+# widen this template and re-curate from raw — no snapshot re-scan needed.
+WORKS_TEMPLATE: dict = {
     "id": "VARCHAR",
     "doi": "VARCHAR",
+    "ids": {"pmid": "VARCHAR", "pmcid": "VARCHAR"},
     "title": "VARCHAR",
     "publication_year": "INTEGER",
     "publication_date": "VARCHAR",
@@ -38,16 +41,27 @@ WORKS_READ_COLUMNS: dict[str, str] = {
     "fwci": "DOUBLE",
     "is_retracted": "BOOLEAN",
     "updated_date": "VARCHAR",
-    "primary_location": "STRUCT(source STRUCT(id VARCHAR, display_name VARCHAR))",
-    "open_access": "STRUCT(is_oa BOOLEAN, oa_status VARCHAR)",
-    "primary_topic": "STRUCT(id VARCHAR, display_name VARCHAR, "
-    "subfield STRUCT(display_name VARCHAR), field STRUCT(display_name VARCHAR), "
-    "domain STRUCT(display_name VARCHAR))",
-    "grants": "STRUCT(funder VARCHAR, funder_display_name VARCHAR, award_id VARCHAR)[]",
-    "counts_by_year": "STRUCT(year INTEGER, cited_by_count BIGINT)[]",
-    "authorships": "STRUCT(author STRUCT(id VARCHAR, display_name VARCHAR), "
-    "institutions STRUCT(id VARCHAR, display_name VARCHAR)[])[]",
+    "primary_location": {"source": {"id": "VARCHAR", "display_name": "VARCHAR"}},
+    "open_access": {"is_oa": "BOOLEAN", "oa_status": "VARCHAR"},
+    "primary_topic": {
+        "id": "VARCHAR",
+        "display_name": "VARCHAR",
+        "subfield": {"display_name": "VARCHAR"},
+        "field": {"display_name": "VARCHAR"},
+        "domain": {"display_name": "VARCHAR"},
+    },
+    "grants": [{"funder": "VARCHAR", "funder_display_name": "VARCHAR", "award_id": "VARCHAR"}],
+    "counts_by_year": [{"year": "INTEGER", "cited_by_count": "BIGINT"}],
+    "authorships": [
+        {
+            "author": {"id": "VARCHAR", "display_name": "VARCHAR"},
+            "institutions": [{"id": "VARCHAR", "display_name": "VARCHAR"}],
+        }
+    ],
 }
+
+# Minimal template to pull author ids out of a raw record for the CU filter.
+_AUTHORSHIPS_TEMPLATE = [{"author": {"id": "VARCHAR"}}]
 
 
 @dataclass(frozen=True)
@@ -126,63 +140,87 @@ def _sql_str_list(values: list[str]) -> str:
     return f"[{escaped}]"
 
 
-def _read_json_call(part_urls: list[str]) -> str:
-    columns = ", ".join(f"'{name}': '{dtype}'" for name, dtype in WORKS_READ_COLUMNS.items())
+def _objects_read_call(part_urls: list[str]) -> str:
+    """``read_json_objects`` over snapshot parts → one ``json`` column per record."""
     return (
-        f"read_json({_sql_str_list(part_urls)}, "
-        "format='newline_delimited', compression='gzip', "
-        f"columns={{{columns}}}, maximum_object_size=104857600)"
+        f"read_json_objects({_sql_str_list(part_urls)}, "
+        "format='newline_delimited', compression='gzip', maximum_object_size=104857600)"
     )
 
 
-def works_scan_sql(part_urls: list[str], *, target_table: str = "target_authors") -> str:
-    """SELECT scanning ``part_urls`` for works authored by the target authors.
+def works_raw_scan_sql(part_urls: list[str], *, target_table: str = "target_authors") -> str:
+    """RAW capture: each snapshot record's full JSON, filtered to target authors.
 
-    Expects a table ``target_table(author_id VARCHAR)`` of *short* ids
-    (e.g. ``A123``). Author ids in the snapshot are full URLs, so we match a
-    constructed ``https://openalex.org/<id>`` list. Output rows are deduped on
-    ``work_id`` by the caller (a work shared by two CU authors appears once).
+    Reads records verbatim (``read_json_objects``) and keeps only those sharing an
+    author with ``target_table`` (short ids; matched as ``https://openalex.org/<id>``).
+    Output: ``work_id``, ``updated_date`` (extracted for keying/partitioning) and
+    ``raw_json`` (the untouched record).
     """
+    authorships_tmpl = json.dumps(_AUTHORSHIPS_TEMPLATE)
     return f"""
 WITH target AS (
     SELECT list('https://openalex.org/' || author_id) AS ids FROM {target_table}
-),
-raw AS (
-    SELECT * FROM {_read_json_call(part_urls)}
 )
 SELECT
-    regexp_replace(raw.id, '^.*/', '')                       AS work_id,
-    raw.doi,
-    raw.title,
-    raw.publication_year,
-    raw.publication_date,
-    raw.type,
-    raw.language,
-    raw.cited_by_count,
-    raw.fwci,
-    raw.is_retracted,
-    raw.updated_date,
-    raw.primary_location.source.display_name                 AS source_name,
-    regexp_replace(raw.primary_location.source.id, '^.*/', '') AS source_id,
-    raw.open_access.is_oa                                    AS is_oa,
-    raw.open_access.oa_status                                AS oa_status,
-    regexp_replace(raw.primary_topic.id, '^.*/', '')         AS primary_topic_id,
-    raw.primary_topic.display_name                           AS primary_topic,
-    raw.primary_topic.subfield.display_name                  AS topic_subfield,
-    raw.primary_topic.field.display_name                     AS topic_field,
-    raw.primary_topic.domain.display_name                    AS topic_domain,
-    list_transform(raw.grants, g -> regexp_replace(g.funder, '^.*/', '')) AS funder_ids,
-    to_json(raw.grants)                                      AS grants_json,
-    to_json(raw.counts_by_year)                              AS citations_by_year_json,
-    list_transform(raw.authorships, x -> regexp_replace(x.author.id, '^.*/', '')) AS all_author_ids,
-    list_intersect(
-        list_transform(raw.authorships, x -> regexp_replace(x.author.id, '^.*/', '')),
-        (SELECT list(author_id) FROM {target_table})
-    )                                                        AS cu_author_ids,
-    to_json(raw.authorships)                                 AS authorships_json
-FROM raw, target
+    regexp_replace(json_extract_string(o.json, '$.id'), '^.*/', '') AS work_id,
+    json_extract_string(o.json, '$.updated_date')                   AS updated_date,
+    o.json                                                          AS raw_json
+FROM {_objects_read_call(part_urls)} o, target
 WHERE list_has_any(
-    list_transform(raw.authorships, x -> x.author.id),
+    list_transform(from_json(o.json -> '$.authorships', '{authorships_tmpl}'), x -> x.author.id),
     target.ids
 )
+"""
+
+
+def works_curate_sql(raw_parquet_glob: str, *, target_table: str = "target_authors") -> str:
+    """CURATE: re-parse raw works JSON into the typed projection, deduped on work_id.
+
+    Reads the raw parquet (``raw_parquet_glob``), keeps the latest captured version
+    of each work (by ``updated_date``), parses ``raw_json`` with WORKS_TEMPLATE, and
+    projects the curated columns. ``cu_author_ids`` intersects with ``target_table``.
+    """
+    works_tmpl = json.dumps(WORKS_TEMPLATE)
+    return f"""
+WITH deduped AS (
+    SELECT raw_json
+    FROM read_parquet('{raw_parquet_glob}')
+    QUALIFY row_number() OVER (PARTITION BY work_id ORDER BY updated_date DESC) = 1
+),
+parsed AS (
+    SELECT from_json(raw_json, '{works_tmpl}') AS w FROM deduped
+)
+SELECT
+    regexp_replace(w.id, '^.*/', '')                         AS work_id,
+    w.doi,
+    regexp_replace(w.ids.pmid, '^.*/', '')                   AS pmid,
+    regexp_replace(w.ids.pmcid, '^.*/', '')                  AS pmcid,
+    w.title,
+    w.publication_year,
+    w.publication_date,
+    w.type,
+    w.language,
+    w.cited_by_count,
+    w.fwci,
+    w.is_retracted,
+    w.updated_date,
+    w.primary_location.source.display_name                  AS source_name,
+    regexp_replace(w.primary_location.source.id, '^.*/', '') AS source_id,
+    w.open_access.is_oa                                     AS is_oa,
+    w.open_access.oa_status                                AS oa_status,
+    regexp_replace(w.primary_topic.id, '^.*/', '')          AS primary_topic_id,
+    w.primary_topic.display_name                            AS primary_topic,
+    w.primary_topic.subfield.display_name                   AS topic_subfield,
+    w.primary_topic.field.display_name                      AS topic_field,
+    w.primary_topic.domain.display_name                     AS topic_domain,
+    list_transform(w.grants, g -> regexp_replace(g.funder, '^.*/', '')) AS funder_ids,
+    to_json(w.grants)                                       AS grants_json,
+    to_json(w.counts_by_year)                               AS citations_by_year_json,
+    list_transform(w.authorships, x -> regexp_replace(x.author.id, '^.*/', '')) AS all_author_ids,
+    list_intersect(
+        list_transform(w.authorships, x -> regexp_replace(x.author.id, '^.*/', '')),
+        (SELECT list(author_id) FROM {target_table})
+    )                                                       AS cu_author_ids,
+    to_json(w.authorships)                                 AS authorships_json
+FROM parsed
 """
