@@ -26,6 +26,7 @@ def _smallest_parts(entries: list[snapshot.ManifestEntry], n: int) -> list[snaps
 def works_flow(
     *,
     author_ids: list[str] | None = None,
+    new_author_count: int | None = None,
     full_refresh: bool = False,
     sample_parts: int | None = None,
     run_date: _dt.date | None = None,
@@ -51,7 +52,11 @@ def works_flow(
         state.init_schema(con)
         if author_ids is None:
             author_ids = state.qualifying_author_ids(con, s.year_cutoff(run_date))
-        new_author_count = state.count_new_authors(con, run_date)
+        # Prefer the accurate count from the authors upsert (passed by the
+        # pipeline). The state fallback (first_seen_run = today) over-counts on a
+        # same-day resume, since the initial run stamped today on every author.
+        if new_author_count is None:
+            new_author_count = state.count_new_authors(con, run_date)
 
         if not author_ids:
             log.warning("no target authors in roster; skipping works ingest")

@@ -59,6 +59,7 @@ async def pipeline(
     # Prefect flow parameter — 512 KB cap).
     works = await asyncio.to_thread(
         works_flow,
+        new_author_count=authors["new_count"],
         full_refresh=full_refresh,
         sample_parts=sample_parts,
         run_date=run_date,
