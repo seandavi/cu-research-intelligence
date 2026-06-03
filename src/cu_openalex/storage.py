@@ -108,11 +108,8 @@ def state_db_path(settings: Settings | None = None) -> Path:
     """Local path to the DuckDB state database (always local; see module docs)."""
     s = settings or get_settings()
     base = s.storage_base_uri.rstrip("/")
-    if base.startswith("file://"):
-        root = _local_root(base)
-    else:
-        # Remote landing pad → keep state under ./data locally.
-        root = Path(os.path.abspath("./data"))
+    # Remote landing pad → keep state under ./data locally (see module docs).
+    root = _local_root(base) if base.startswith("file://") else Path(os.path.abspath("./data"))
     path = root / "state" / "state.duckdb"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
