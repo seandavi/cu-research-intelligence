@@ -93,16 +93,27 @@ def works_flow(
             urls = [e.https_url for e in selected]
             ingested = state.ingest_works(con, snapshot.works_scan_sql(urls), run_date=run_date)
         else:
-            # Group by date so all parts of a date ingest together before the
-            # watermark advances — keeps a crashed backfill resumable.
+            # Group by date for resumability (watermark advances per date), but
+            # scan ONE part-file at a time to bound memory — a single date can
+            # hold several ~1 GB parts, and scanning them together can OOM.
             for day, group in groupby(selected, key=lambda e: e.updated_date):
                 parts = list(group)
-                urls = [e.https_url for e in parts]
-                n = state.ingest_works(con, snapshot.works_scan_sql(urls), run_date=run_date)
+                day_total = 0
+                for i, part in enumerate(parts, 1):
+                    n = state.ingest_works(
+                        con, snapshot.works_scan_sql([part.https_url]), run_date=run_date
+                    )
+                    day_total += n
+                    if len(parts) > 1:
+                        log.info("    %s part %d/%d -> %d works", day, i, len(parts), n)
                 state.set_watermark(con, "works", day)
-                ingested += n
+                ingested += day_total
                 log.info(
-                    "  %s: %d parts -> %d works (running total %d)", day, len(parts), n, ingested
+                    "  %s: %d parts -> %d works (running total %d)",
+                    day,
+                    len(parts),
+                    day_total,
+                    ingested,
                 )
 
         works_parquet = state.export_works_parquet(con, settings=s)

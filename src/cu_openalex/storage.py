@@ -133,6 +133,13 @@ def duckdb_connect(
     s = settings or get_settings()
     con = duckdb.connect(database or str(state_db_path(s)))
     con.execute("INSTALL httpfs; LOAD httpfs;")
+    # Bound memory and let large snapshot scans spill to disk rather than OOM.
+    tmp_dir = state_db_path(s).parent / "duckdb_tmp"
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    con.execute(f"SET memory_limit = '{s.duckdb_memory_limit}';")
+    con.execute(f"SET threads = {s.duckdb_threads};")
+    con.execute(f"SET temp_directory = '{tmp_dir}';")
+    con.execute("SET preserve_insertion_order = false;")
     if s.writes_to_r2 and s.r2_endpoint_url and s.r2_access_key_id:
         endpoint = urlparse(s.r2_endpoint_url).netloc or s.r2_endpoint_url
         con.execute(

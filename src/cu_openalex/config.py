@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     per_page: int = Field(default=200, ge=1, le=200)
     max_retries: int = Field(default=5, ge=0)
 
+    # --- DuckDB resource limits (bound the snapshot scan; spill to disk) ---
+    duckdb_memory_limit: str = "16GB"
+    duckdb_threads: int = Field(default=4, ge=1)
+
     def year_cutoff(self, today: _dt.date | None = None) -> int:
         """Earliest affiliation year to keep (inclusive).
 
