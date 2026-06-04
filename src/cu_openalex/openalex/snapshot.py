@@ -31,7 +31,7 @@ _UPDATED_DATE_RE = re.compile(r"updated_date=(\d{4}-\d{2}-\d{2})")
 WORKS_TEMPLATE: dict = {
     "id": "VARCHAR",
     "doi": "VARCHAR",
-    "ids": {"pmid": "VARCHAR", "pmcid": "VARCHAR"},
+    "ids": {"pmid": "VARCHAR"},  # pmcid isn't in the snapshot's ids; see curate SQL
     "title": "VARCHAR",
     "publication_year": "INTEGER",
     "publication_date": "VARCHAR",
@@ -188,13 +188,14 @@ WITH deduped AS (
     QUALIFY row_number() OVER (PARTITION BY work_id ORDER BY updated_date DESC) = 1
 ),
 parsed AS (
-    SELECT from_json(raw_json, '{works_tmpl}') AS w FROM deduped
+    SELECT from_json(raw_json, '{works_tmpl}') AS w, raw_json FROM deduped
 )
 SELECT
     regexp_replace(w.id, '^.*/', '')                         AS work_id,
     w.doi,
     regexp_replace(w.ids.pmid, '^.*/', '')                   AS pmid,
-    regexp_replace(w.ids.pmcid, '^.*/', '')                  AS pmcid,
+    -- The snapshot omits ids.pmcid; the PMC accession lives in location URLs.
+    nullif(regexp_extract(raw_json, 'pmc/articles/(PMC[0-9]+)', 1), '') AS pmcid,
     w.title,
     w.publication_year,
     w.publication_date,

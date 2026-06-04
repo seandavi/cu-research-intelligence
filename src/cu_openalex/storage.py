@@ -35,6 +35,15 @@ def _base(settings: Settings | None = None) -> str:
     return (settings or get_settings()).storage_base_uri.rstrip("/")
 
 
+def _auto_memory_limit() -> str:
+    """~70% of system RAM as a DuckDB ``memory_limit`` string (OS headroom kept)."""
+    try:
+        total = os.sysconf("SC_PHYS_PAGES") * os.sysconf("SC_PAGE_SIZE")
+        return f"{max(4, int(total * 0.7 / (1024**3)))}GB"
+    except (ValueError, OSError, AttributeError):
+        return "8GB"
+
+
 def _local_root(base: str) -> Path:
     """Absolute local directory for a ``file://`` base URI."""
     # Accept file://./data, file://data, file:///abs/path
@@ -181,10 +190,12 @@ def duckdb_connect(
     s = settings or get_settings()
     con = duckdb.connect(database or str(state_db_path(s)))
     con.execute("INSTALL httpfs; LOAD httpfs;")
-    # Bound memory and let large snapshot scans spill to disk rather than OOM.
+    # Bound memory and let large scans spill to disk rather than OOM. The default
+    # is ~70% of system RAM (leaving OS headroom) — much higher than DuckDB would
+    # need for a per-part scan, but enough for the curate's full-corpus rebuild.
     tmp_dir = state_db_path(s).parent / "duckdb_tmp"
     tmp_dir.mkdir(parents=True, exist_ok=True)
-    con.execute(f"SET memory_limit = '{s.duckdb_memory_limit}';")
+    con.execute(f"SET memory_limit = '{s.duckdb_memory_limit or _auto_memory_limit()}';")
     con.execute(f"SET threads = {s.duckdb_threads};")
     con.execute(f"SET temp_directory = '{tmp_dir}';")
     con.execute("SET preserve_insertion_order = false;")
