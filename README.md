@@ -114,7 +114,8 @@ The works watermark governs raw capture; `--full-refresh` re-captures all partit
 - **Authors**: identity + affiliations + **name synonyms** (`name_alternatives`,
   for cross-database matching), plus metrics — `h_index`, `i10_index`,
   `mean_citedness_2yr`, `counts_by_year_json`.
-- **Works**: identity + authorship + **`pmid`/`pmcid`** (when present) + `doi`,
+- **Works**: identity + authorship + **`pmid`** (45%) / **`pmcid`** (regex-extracted
+  from PMC location URLs — the snapshot's `ids` omits pmcid; ~1%) + `doi` (92%),
   plus `fwci`, `is_oa`/`oa_status`, `primary_topic` (topic/subfield/field/domain),
   `source_id`, **grants** (`funder_ids` + `grants_json`), and citation
   `counts_by_year_json`. OpenAlex grant coverage is currently empty upstream —
