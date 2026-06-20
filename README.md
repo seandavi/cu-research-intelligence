@@ -169,8 +169,8 @@ uv run --extra dashboard streamlit run \
 Pages: leadership **overview**, **publications** over time, **program
 collaboration** (the intra/inter heatmap + trends), research **expertise**,
 co-authorship **networks**, a **member** directory, and **Ask** — a
-natural-language interface that turns questions into read-only SQL with Claude
-(set `ANTHROPIC_API_KEY`; model via `CU_OPENALEX_CHAT_MODEL`).
+natural-language interface that turns questions into read-only SQL with Gemini
+(set `GEMINI_API_KEY` on the server; model via `CU_OPENALEX_CHAT_MODEL`).
 
 **Method & caveats** (ADR-0013): members are matched by ORCID + name with a
 recorded confidence tier; ~700/1,143 resolve, so collaboration counts are lower
@@ -196,7 +196,7 @@ database server (DuckDB reads the curated Parquet in-process):
 uv run --extra api uvicorn cu_openalex.cancer_center.api:app --reload
 # GET /api/kpi · /api/program-summary · /api/program-collaboration-matrix
 # GET /api/publications-by-year · /api/top-topics · /api/members · /api/meta
-# POST /api/chat  {question}   (NL→SQL; needs ANTHROPIC_API_KEY)
+# POST /api/chat  {question}   (NL→SQL via Gemini; needs GEMINI_API_KEY)
 ```
 
 ### React frontend (`web/`)
@@ -219,7 +219,7 @@ public service). The curated tables mount read-only; no database to run.
 docker compose up -d --build   # edit the Host()/certresolver labels first
 ```
 
-Set `ANTHROPIC_API_KEY` (for chat) and gate the `web` router behind Traefik
+Set `GEMINI_API_KEY` (for chat) and gate the `web` router behind Traefik
 auth for an EAB/leadership audience.
 
 ## Decisions

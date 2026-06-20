@@ -16,7 +16,10 @@ services:
     image: cu-openalex-api:latest
     restart: unless-stopped
     environment:
-      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}  # enables /api/chat
+      # Server-side Gemini key — enables /api/chat. End users never supply it.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # Optional: override the chat model (default gemini-2.5-flash).
+      CU_OPENALEX_CHAT_MODEL: ${CU_OPENALEX_CHAT_MODEL:-}
     volumes:
       - ./data/cancer_center:/app/data/cancer_center:ro
     networks:

@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-
 import streamlit as st
 
 from cu_openalex.cancer_center import chat
@@ -26,10 +24,10 @@ def main() -> None:
         "can inspect."
     )
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not chat._api_key():
         st.warning(
-            "Set `ANTHROPIC_API_KEY` in the environment to enable chat. You can "
-            "still explore the data on the other pages."
+            "The chat service isn't configured (no `GEMINI_API_KEY` on the server). "
+            "You can still explore the data on the other pages."
         )
 
     with st.sidebar:

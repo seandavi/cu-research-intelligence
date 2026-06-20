@@ -1,13 +1,14 @@
 """Natural-language chat interface to the cancer-center data.
 
-A thin agentic loop: Claude is given the cc table schema and a single
+A thin agentic loop: Gemini is given the cc table schema and a single
 ``query_database`` tool that runs **read-only** DuckDB SQL. It writes a query,
 sees the rows, and answers in prose (optionally iterating). All execution goes
 through :func:`run_safe_sql`, which rejects anything that is not a single
 read-only ``SELECT`` / ``WITH`` statement — the model never gets write access.
 
-The model id defaults to a current Claude model and is overridable via
-``CU_OPENALEX_CHAT_MODEL``. The API key is read from ``ANTHROPIC_API_KEY``.
+The model id defaults to a current Gemini model and is overridable via
+``CU_OPENALEX_CHAT_MODEL``. The API key is read **server-side** from
+``GEMINI_API_KEY`` (or ``GOOGLE_API_KEY``) — end users never supply it.
 """
 
 from __future__ import annotations
@@ -20,9 +21,15 @@ import polars as pl
 
 from . import queries as q
 
-DEFAULT_MODEL = os.environ.get("CU_OPENALEX_CHAT_MODEL", "claude-sonnet-4-6")
+DEFAULT_MODEL = os.environ.get("CU_OPENALEX_CHAT_MODEL", "gemini-2.5-flash")
 MAX_RESULT_ROWS = 200
 MAX_TOOL_ITERS = 6
+
+
+def _api_key() -> str | None:
+    """The server-side Gemini key (GEMINI_API_KEY preferred, GOOGLE_API_KEY ok)."""
+    return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY")
+
 
 # Statements/keywords that must never appear — defense in depth on top of the
 # read-only intent (the views are in-memory, but we still refuse mutations).
@@ -59,11 +66,20 @@ TABLE works  -- one row per work with >=1 member author
   cc_member_ids (LIST), cc_author_ids (LIST),
   is_inter_program (bool: members from >=2 programs),
   is_intra_program (bool: >=2 members in one program),
-  collaboration_class ('solo'/'intra_program'/'inter_program')
+  collaboration_class ('solo'/'intra_program'/'inter_program'),
+  has_external_collab (bool: >=1 institution outside the home campus =
+    inter-institutional), is_international (bool: >=1 non-US institution),
+  n_institutions (distinct institutions on the work)
 
 TABLE member_works  -- member x work bridge (one row per member per work)
   member_id, author_id, program, work_id, publication_year, cited_by_count,
-  fwci, is_oa, type, primary_topic, topic_field, source_name
+  rcr, fwci, is_oa, is_publication, type, primary_topic, topic_field, source_name
+
+TABLE institutions  -- work x institution bridge (for inter-institutional)
+  work_id, institution_id, institution_name, country_code,
+  is_home (bool: TRUE for the Univ. of Colorado Anschutz complex). Rank external
+  collaborators with: SELECT institution_name, count(DISTINCT work_id) FROM
+  institutions WHERE NOT is_home GROUP BY 1 ORDER BY 2 DESC.
 
 KEY DEFINITIONS (NCI CCSG convention):
 - intra-programmatic publication: >=2 cancer-center members of the SAME program.
@@ -95,20 +111,11 @@ Rules:
 - If a question is ambiguous, make a reasonable choice and state your assumption.
 """
 
-TOOLS = [
-    {
-        "name": "query_database",
-        "description": "Run a read-only DuckDB SQL query against the cancer-center "
-        "tables (members, works, member_works) and return the rows as JSON.",
-        "input_schema": {
-            "type": "object",
-            "properties": {
-                "sql": {"type": "string", "description": "A single read-only SELECT/WITH query."}
-            },
-            "required": ["sql"],
-        },
-    }
-]
+_TOOL_NAME = "query_database"
+_TOOL_DESCRIPTION = (
+    "Run a read-only DuckDB SQL query against the cancer-center tables "
+    "(members, works, member_works, institutions) and return the rows as CSV."
+)
 
 
 class UnsafeSQLError(ValueError):
@@ -145,65 +152,95 @@ def _result_to_tool_payload(df: pl.DataFrame) -> str:
     return f"{capped.write_csv()}{note}"
 
 
+def _history_to_contents(history: list[dict] | None, types) -> list:
+    """Convert simple ``[{role, text}]`` history into Gemini ``Content`` turns."""
+    contents = []
+    for turn in history or []:
+        role = "model" if turn.get("role") in ("model", "assistant") else "user"
+        text = turn.get("text") or turn.get("content") or ""
+        if text:
+            contents.append(types.Content(role=role, parts=[types.Part(text=str(text))]))
+    return contents
+
+
 def ask(question: str, history: list[dict] | None = None, model: str | None = None) -> ChatResult:
     """Answer ``question`` against the cc data, running SQL as needed.
 
-    ``history`` is a prior Anthropic ``messages`` list for multi-turn context.
-    Returns a :class:`ChatResult`. Requires ``ANTHROPIC_API_KEY``.
+    Uses Gemini function-calling with the read-only ``query_database`` tool.
+    ``history`` is an optional list of ``{role, text}`` turns. The Gemini key is
+    read server-side (``GEMINI_API_KEY``/``GOOGLE_API_KEY``); returns a
+    :class:`ChatResult`.
     """
     try:
-        import anthropic
+        from google import genai
+        from google.genai import types
     except ImportError:  # pragma: no cover - dependency guard
-        return ChatResult(answer="", error="The `anthropic` package is not installed.")
+        return ChatResult(answer="", error="The `google-genai` package is not installed.")
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
+    if not _api_key():
         return ChatResult(
             answer="",
-            error="ANTHROPIC_API_KEY is not set. Add it to your environment to enable chat.",
+            error="The chat service is not configured (no Gemini API key on the server).",
         )
 
-    client = anthropic.Anthropic()
-    messages = list(history or [])
-    messages.append({"role": "user", "content": question})
+    client = genai.Client(api_key=_api_key())
+    tool = types.Tool(
+        function_declarations=[
+            types.FunctionDeclaration(
+                name=_TOOL_NAME,
+                description=_TOOL_DESCRIPTION,
+                parameters=types.Schema(
+                    type=types.Type.OBJECT,
+                    properties={
+                        "sql": types.Schema(
+                            type=types.Type.STRING,
+                            description="A single read-only SELECT / WITH query (DuckDB dialect).",
+                        )
+                    },
+                    required=["sql"],
+                ),
+            )
+        ]
+    )
+    config = types.GenerateContentConfig(
+        system_instruction=SYSTEM_PROMPT,
+        tools=[tool],
+        temperature=0,
+        max_output_tokens=1500,
+    )
+
+    contents = _history_to_contents(history, types)
+    contents.append(types.Content(role="user", parts=[types.Part(text=question)]))
 
     result = ChatResult(answer="")
     for _ in range(MAX_TOOL_ITERS):
-        resp = client.messages.create(
-            model=model or DEFAULT_MODEL,
-            max_tokens=1500,
-            system=SYSTEM_PROMPT,
-            tools=TOOLS,
-            messages=messages,
-        )
-        messages.append({"role": "assistant", "content": resp.content})
-
-        if resp.stop_reason != "tool_use":
-            result.answer = "".join(b.text for b in resp.content if b.type == "text").strip()
+        try:
+            resp = client.models.generate_content(
+                model=model or DEFAULT_MODEL, contents=contents, config=config
+            )
+        except Exception as exc:  # pragma: no cover - network/api failure
+            result.error = f"Gemini request failed: {exc}"
             return result
 
-        tool_results = []
-        for block in resp.content:
-            if block.type != "tool_use":
-                continue
-            sql = block.input.get("sql", "")
+        calls = resp.function_calls or []
+        if not calls:
+            result.answer = (resp.text or "").strip()
+            return result
+
+        # Record the model's turn, then answer each function call.
+        contents.append(resp.candidates[0].content)
+        parts = []
+        for call in calls:
+            sql = (call.args or {}).get("sql", "")
             result.queries.append(sql)
             try:
                 df = run_safe_sql(sql)
                 result.tables.append(df)
-                payload = _result_to_tool_payload(df)
-                tool_results.append(
-                    {"type": "tool_result", "tool_use_id": block.id, "content": payload}
-                )
-            except Exception as exc:  # surface the error back to the model to retry
-                tool_results.append(
-                    {
-                        "type": "tool_result",
-                        "tool_use_id": block.id,
-                        "content": f"ERROR: {exc}",
-                        "is_error": True,
-                    }
-                )
-        messages.append({"role": "user", "content": tool_results})
+                response = {"result": _result_to_tool_payload(df)}
+            except Exception as exc:  # surface the error so the model can retry
+                response = {"error": str(exc)}
+            parts.append(types.Part.from_function_response(name=call.name, response=response))
+        contents.append(types.Content(role="user", parts=parts))
 
     result.answer = "I wasn't able to converge on an answer within the query budget."
     result.error = "max_tool_iterations"

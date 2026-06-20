@@ -11,7 +11,7 @@ Run locally::
 
 Or via Docker / docker-compose (see Dockerfile + docker-compose.yml). The service
 reads the curated Parquet under ``data/cancer_center/`` through DuckDB in-process
-— no database server required. Set ``ANTHROPIC_API_KEY`` to enable ``/api/chat``;
+— no database server required. Set ``GEMINI_API_KEY`` to enable ``/api/chat``;
 restrict browser origins with ``CU_OPENALEX_CORS_ORIGINS`` (comma-separated).
 """
 
