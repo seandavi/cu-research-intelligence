@@ -36,9 +36,14 @@ _TIER_SCORE = {
     "name_exact": 40,
     "name_initial_cu": 30,
 }
+# Confidence reflects *identity certainty*, not just match strength. Only an
+# ORCID match verifies identity; an exact-name match — even for a current-CU
+# author — can still merge distinct people who share a common name (e.g. several
+# "Richard Johnson"s), so name matches cap at "medium". Reviewers can filter to
+# high (ORCID-verified) for the most defensible numbers.
 _CONFIDENCE = {
     "orcid": "high",
-    "name_exact_cu": "high",
+    "name_exact_cu": "medium",
     "name_exact": "medium",
     "name_initial_cu": "low",
 }

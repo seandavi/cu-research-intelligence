@@ -43,8 +43,11 @@ TABLE members  -- one row per roster member (1,143 rows)
   author_id (OpenAlex id; NULL if unresolved),
   confidence ('high'/'medium'/'low'; how reliable the author match is)
 
-TABLE works  -- one row per publication with >=1 member author (~136k rows)
+TABLE works  -- one row per work with >=1 member author
   work_id, title, publication_year, doi, pmid, type, cited_by_count,
+  is_publication (bool: TRUE for peer-reviewed article/review; FALSE for
+    preprints/supplementary/datasets -- ADD `WHERE is_publication` for any
+    publication count, this is the default everywhere else),
   fwci (field-weighted citation impact; 1.0 = world avg), is_oa (open access),
   primary_topic, topic_subfield, topic_field, topic_domain, source_name (journal),
   n_total_authors, n_cc_members (cancer-center authors on the work),

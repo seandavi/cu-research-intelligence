@@ -24,6 +24,7 @@ import polars as pl
 from ..storage import duckdb_connect
 from .members import load_members
 from .paths import cc_target
+from .programs import MAX_VALID_YEAR, MIN_VALID_YEAR, publication_types_sql
 from .resolve import build_crosswalk
 
 _WORKS_GLOB = "data/openalex/works/**/*.parquet"
@@ -112,6 +113,9 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
             """
         )
 
+        pub_types = publication_types_sql()
+        min_year, max_year = MIN_VALID_YEAR, MAX_VALID_YEAR
+
         # member x work bridge (carry minimal work metadata for rollups).
         member_works_path = cc_target("member_works")
         con.execute(
@@ -119,10 +123,12 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
             COPY (
                 SELECT wa.member_id, wa.author_id, wa.program, wa.confidence,
                        w.work_id, w.publication_year, w.cited_by_count, w.fwci,
-                       w.is_oa, w.type, w.primary_topic, w.topic_field,
+                       w.is_oa, w.type, (w.type IN {pub_types}) AS is_publication,
+                       w.primary_topic, w.topic_field,
                        w.topic_subfield, w.source_name
                 FROM work_author wa
                 JOIN '{_WORKS_GLOB}' w USING (work_id)
+                WHERE w.publication_year BETWEEN {min_year} AND {max_year}
             ) TO '{member_works_path}' (FORMAT PARQUET)
             """
         )
@@ -167,6 +173,9 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                        a.cc_member_ids, a.cc_author_ids, a.programs,
                        a.any_active_member,
                        COALESCE(i.max_in_one_program, 0) AS max_in_one_program,
+                       -- Peer-reviewed publication? Excludes preprints,
+                       -- supplementary-materials, datasets, paratext (ADR-0013).
+                       (w.type IN {pub_types}) AS is_publication,
                        -- Independent, possibly-overlapping flags (SKCCC convention):
                        (a.n_programs >= 2) AS is_inter_program,
                        (COALESCE(i.max_in_one_program, 0) >= 2) AS is_intra_program,
@@ -179,6 +188,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                 FROM agg a
                 JOIN '{_WORKS_GLOB}' w USING (work_id)
                 LEFT JOIN intra i USING (work_id)
+                WHERE w.publication_year BETWEEN {min_year} AND {max_year}
             ) TO '{works_path}' (FORMAT PARQUET)
             """
         )

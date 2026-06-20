@@ -65,14 +65,41 @@ def main() -> None:
     c1, c2 = st.columns(2)
     c1.metric("Members in network", shared.fmt_int(n_nodes))
     c2.metric("Co-authorship ties", shared.fmt_int(n_edges))
-    components.html(html, height=660, scrolling=False)
 
+    # Lead with the readable, actionable table; the graph is supporting detail.
     st.subheader("Bridge investigators (by betweenness centrality)")
+    st.caption(
+        "Members whose collaborations connect otherwise-separate communities — "
+        "high-leverage people for cross-program initiatives."
+    )
     hubs = _hubs(min_year, max_year, min_shared, program)
     if hubs.height:
         st.dataframe(hubs.head(15).to_pandas(), use_container_width=True, hide_index=True)
 
+    st.subheader("Co-authorship graph")
+    _program_legend()
+    st.caption(
+        "Node = member (size ∝ publications), edge = shared publications. "
+        "The graph takes a moment to settle into its layout."
+    )
+    components.html(html, height=660, scrolling=False)
+
     shared.coverage_caveat(max_year)
+
+
+def _program_legend() -> None:
+    """Render program → color swatches matching the network node colors."""
+    from cu_openalex.cancer_center.networks import program_colors
+
+    progs = shared.program_options()
+    colors = program_colors(progs)
+    chips = "".join(
+        f"<span style='display:inline-block;margin:2px 8px 2px 0;white-space:nowrap'>"
+        f"<span style='display:inline-block;width:11px;height:11px;background:{colors[p]};"
+        f"border-radius:2px;margin-right:4px'></span>{p}</span>"
+        for p in progs
+    )
+    st.markdown(chips, unsafe_allow_html=True)
 
 
 main()

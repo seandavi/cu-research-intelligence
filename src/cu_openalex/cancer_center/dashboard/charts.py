@@ -54,16 +54,12 @@ def collaboration_pct_lines(df: pl.DataFrame) -> go.Figure:
         line=dict(color=CLASS_COLORS["inter_program"], width=3),
         mode="lines+markers",
     )
-    fig.add_hline(
-        y=10,
-        line_dash="dot",
-        line_color="#999",
-        annotation_text="10% historical CCSG floor",
-        annotation_position="top left",
-    )
+    # Stable y-axis so year-to-year movement isn't exaggerated by autoscale.
+    ymax = max(25.0, float(pdf[["pct_intra", "pct_inter"]].max().max()) + 3)
     fig.update_layout(
         yaxis_title="% of publications",
         xaxis_title="Year",
+        yaxis_range=[0, ymax],
         margin=dict(t=10, b=10),
         hovermode="x unified",
         legend=dict(orientation="h", yanchor="bottom", y=1.02),
@@ -121,18 +117,21 @@ def collaboration_heatmap(matrix: pl.DataFrame, programs: list[str]) -> go.Figur
 
 
 def topic_bar(df: pl.DataFrame, label_col: str = "topic") -> go.Figure:
-    """Horizontal bar of top topics/fields by publication count."""
+    """Horizontal bar of top topics/fields, labeled with FWCI (legible at width)."""
     pdf = df.sort("publications", descending=False).to_pandas()
+    pdf["fwci_label"] = pdf["mean_fwci"].map(lambda v: f"FWCI {v:.1f}" if v is not None else "")
     fig = px.bar(
         pdf,
         x="publications",
         y=label_col,
         orientation="h",
         color="mean_fwci",
-        color_continuous_scale="Viridis",
+        color_continuous_scale="Blues",
+        text="fwci_label",
         labels={"publications": "Publications", label_col: "", "mean_fwci": "Mean FWCI"},
     )
-    fig.update_layout(margin=dict(t=10, b=10))
+    fig.update_traces(textposition="outside", cliponaxis=False)
+    fig.update_layout(margin=dict(t=10, b=10), coloraxis_colorbar=dict(title="Mean FWCI"))
     return fig
 
 

@@ -51,6 +51,9 @@ def main() -> None:
             "match_confidence": st.column_config.TextColumn("Match"),
         },
     )
+    shared.download_button(
+        df, "⬇ Download member directory (CSV)", "uccc_member_directory.csv", key="dl_members"
+    )
 
     shared.coverage_caveat(max_year)
 

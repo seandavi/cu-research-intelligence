@@ -22,7 +22,8 @@ from .paths import cc_target
 # indexing-lag caveat; trend charts annotate this.
 DEFAULT_MIN_YEAR = 2015
 DEFAULT_MAX_YEAR = 2024
-INDEXING_LAG_FROM = 2024
+# Years >= this are still filling in (OpenAlex indexing lag); flagged as provisional.
+INDEXING_LAG_FROM = 2025
 
 
 @functools.lru_cache(maxsize=1)
@@ -45,10 +46,26 @@ def run_sql(sql: str) -> pl.DataFrame:
     return connect().sql(sql).pl()
 
 
-def _year_clause(min_year: int | None, max_year: int | None, col: str = "publication_year") -> str:
+def _year_clause(
+    min_year: int | None,
+    max_year: int | None,
+    col: str = "publication_year",
+    publications_only: bool = True,
+) -> str:
+    """Year-range predicate, with the peer-reviewed-publication filter by default.
+
+    ``publications_only`` appends ``AND <alias>.is_publication`` so headline
+    metrics exclude preprints / supplementary-materials / datasets (ADR-0013).
+    The table alias is inferred from ``col`` (e.g. ``w.publication_year`` →
+    ``w.is_publication``).
+    """
     lo = min_year if min_year is not None else DEFAULT_MIN_YEAR
     hi = max_year if max_year is not None else DEFAULT_MAX_YEAR
-    return f"{col} BETWEEN {lo} AND {hi}"
+    clause = f"{col} BETWEEN {lo} AND {hi}"
+    if publications_only:
+        alias = f"{col.rsplit('.', 1)[0]}." if "." in col else ""
+        clause += f" AND {alias}is_publication"
+    return clause
 
 
 # --- Headline / leadership KPIs ---------------------------------------------
@@ -65,8 +82,10 @@ def kpi_summary(min_year: int | None = None, max_year: int | None = None) -> dic
             count(*) AS publications,
             sum(cited_by_count)::BIGINT AS citations,
             round(avg(fwci), 2) AS mean_fwci,
+            round(median(fwci), 2) AS median_fwci,
             round(100.0 * avg(is_oa::int), 1) AS pct_open_access,
             round(100.0 * avg((collaboration_class != 'solo')::int), 1) AS pct_collaborative,
+            count(*) FILTER (WHERE collaboration_class != 'solo') AS n_collaborative,
             round(100.0 * avg(is_inter_program::int), 1) AS pct_inter_program,
             round(100.0 * avg(is_intra_program::int), 1) AS pct_intra_program,
             count(*) FILTER (WHERE fwci >= 2) AS high_impact_fwci2

@@ -18,16 +18,13 @@ import unicodedata
 import polars as pl
 
 from .paths import MEMBERS_XLSX
+from .programs import NON_PROGRAMS, canonical_program
 
 _ORCID_RE = re.compile(r"(\d{4}-\d{4}-\d{4}-\d{3}[\dX])")
 
 # Programs that are not real scientific programs — excluded from program-level
-# collaboration analysis but retained in the roster.
-NON_PROGRAM_VALUES = {
-    "",
-    "Unknown/ Unaffiliated/ Emeritus",
-    "Unknown/Unaffiliated/Emeritus",
-}
+# collaboration analysis but retained in the roster. Sourced from programs.py.
+NON_PROGRAM_VALUES = set(NON_PROGRAMS)
 
 
 def parse_orcid(raw: str | None) -> str | None:
@@ -55,14 +52,21 @@ def load_members(path=MEMBERS_XLSX) -> pl.DataFrame:
     """Read the roster Excel and add normalized helper columns.
 
     Adds: ``orcid`` (parsed), ``last_norm``, ``first_norm``, ``first_initial``,
-    ``is_active`` (Current_Status == Active), and ``is_real_program``.
+    ``is_active`` (Current_Status == Active), and ``is_real_program``. Program
+    labels are canonicalized (near-duplicate folding) via ``programs.py``. The
+    roster contains exact-duplicate rows for some members (same ``Member_ID``);
+    these are collapsed so a member is never double-counted.
     """
     df = pl.read_excel(path)
+    df = df.unique(subset=["Member_ID"], keep="first")
 
     df = df.with_columns(
         pl.col("Orc_ID").map_elements(parse_orcid, return_dtype=pl.Utf8).alias("orcid"),
         pl.col("Last_Name").map_elements(normalize_name, return_dtype=pl.Utf8).alias("last_norm"),
         pl.col("First_Name").map_elements(normalize_name, return_dtype=pl.Utf8).alias("first_norm"),
+        pl.col("PrimaryProgram")
+        .map_elements(canonical_program, return_dtype=pl.Utf8)
+        .alias("PrimaryProgram"),
     )
     df = df.with_columns(
         pl.col("first_norm").str.slice(0, 1).alias("first_initial"),

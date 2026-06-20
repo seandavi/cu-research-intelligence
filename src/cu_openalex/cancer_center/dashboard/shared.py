@@ -17,13 +17,17 @@ APP_TITLE = "UCCC Research Intelligence"
 
 
 def setup_page(title: str, icon: str = "🔬", wide: bool = True) -> None:
-    """Standard page config + a consistent header."""
+    """Standard page config + a consistent header.
+
+    The emoji is used as the browser/tab icon only — the rendered H1 stays plain
+    for a formal (NIH/EAB) audience.
+    """
     st.set_page_config(
         page_title=f"{title} · {APP_TITLE}",
         page_icon=icon,
         layout="wide" if wide else "centered",
     )
-    st.title(f"{icon} {title}")
+    st.title(title)
 
 
 # --- Cached data access ------------------------------------------------------
@@ -97,17 +101,35 @@ def program_filter(label: str = "Program") -> str | None:
 def coverage_caveat(max_year: int) -> None:
     """Render the standing data-provenance caveat (shown once per page)."""
     msgs = [
-        "**About this data.** Members are matched to OpenAlex authors by ORCID and "
-        "name; ~700 of 1,143 resolve, so collaboration figures are **lower bounds**. "
-        "Within-year *ratios* (collaboration %, OA %, FWCI) are more reliable than "
-        "absolute counts.",
+        "**About this data.** Counts are peer-reviewed articles & reviews "
+        "(preprints, supplementary files, and datasets excluded). Members are "
+        "matched to OpenAlex authors by ORCID and name; ~675 of 1,115 resolve, so "
+        "collaboration figures are **lower bounds**. Only ORCID matches are "
+        "identity-verified (*high* confidence); name matches are *medium*. "
+        "Within-year *ratios* are more reliable than absolute counts.",
     ]
     if max_year >= q.INDEXING_LAG_FROM:
         msgs.append(
-            f"Publication counts for **{q.INDEXING_LAG_FROM}+ undercount** due to "
-            "OpenAlex indexing lag — interpret recent-year trends with care."
+            f"**{q.INDEXING_LAG_FROM}+ is provisional** — recent publications are "
+            "still being indexed by OpenAlex."
         )
     st.caption(" ".join(msgs))
+
+
+def provisional_note(max_year: int) -> None:
+    """Inline warning placed directly above a time-series when it includes
+    provisional (still-indexing) years — so the caveat sits where it's needed."""
+    if max_year >= q.INDEXING_LAG_FROM:
+        st.caption(
+            f":orange[⚠ {q.INDEXING_LAG_FROM}+ is provisional — counts will rise as "
+            "OpenAlex finishes indexing recent work.]"
+        )
+
+
+def download_button(df, label: str, filename: str, key: str | None = None) -> None:
+    """Offer a Polars frame as a CSV download (for EAB/CCSG reporting)."""
+    csv = df.write_csv() if hasattr(df, "write_csv") else df.to_csv(index=False)
+    st.download_button(label, data=csv, file_name=filename, mime="text/csv", key=key)
 
 
 def kpi_row(items: list[tuple[str, str, str | None]]) -> None:

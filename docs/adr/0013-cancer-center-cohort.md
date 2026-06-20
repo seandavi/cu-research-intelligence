@@ -59,6 +59,29 @@ names) into one `author_id` with an impossible `works_count`. IDs with
 `works_count > 2000` are excluded from attribution (one in this roster — a "Rui
 Zhao" ID with 40,099 works that alone produced a spurious 2020–2021 spike).
 
+**Document-type filter** (critical): a 2023 OpenAlex bulk-index event injected
+thousands of AACR *supplementary-materials* and *preprint* records (titles like
+"Figure S3 from…", "Data from…") that inflated 2023 publications ~2.3× and
+doubled the apparent collaboration rate. Curated works carry an `is_publication`
+flag (`type IN ('article','review')`); all headline metrics filter on it. With
+the filter, collaboration is flat at ~10–12% across 2016–2024 and the 2023 spike
+disappears. Types and the canonical program map live in `programs.py`.
+
+**Honest confidence**: only ORCID matches are "high" (identity-verified). Exact-
+name matches — even to current-CU authors — cap at "medium", because common names
+(several "Richard Johnson"s) can still merge distinct people. Reviewers can
+restrict to high-confidence for the most defensible numbers.
+
+**Data hygiene**: the roster has exact-duplicate rows (same `Member_ID`) and the
+works corpus has dirty publication years (1620, 2027); both are cleaned (dedup on
+`Member_ID`; year bounded to 1950–2026). Near-duplicate program labels are folded
+(`Molecular Oncology → Molecular & Cellular Oncology` — a candidate merge to
+confirm with the center); non-program buckets (Emeritus/blank) are excluded from
+program comparisons, and small/legacy programs are suppressible by a threshold.
+
+These hardening steps came out of an independent multi-stakeholder review
+(researcher, leadership, NIH EAB evaluator, UX) of the first build.
+
 ## Consequences
 
 - Headline metrics are **ratios within a year** (collaboration %, OA %, FWCI) —
