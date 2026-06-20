@@ -124,6 +124,22 @@ def members(min_year: int | None = None, max_year: int | None = None) -> list[di
     return _records(q.member_directory(min_year, max_year))
 
 
+@app.get("/api/top-collaborators")
+def top_collaborators(
+    min_year: int | None = None,
+    max_year: int | None = None,
+    limit: int = Query(20, ge=1, le=100),
+) -> list[dict]:
+    return _records(q.top_collaborators(min_year, max_year, limit=limit))
+
+
+@app.get("/api/inter-institutional-trend")
+def inter_institutional_trend(
+    min_year: int | None = None, max_year: int | None = None
+) -> list[dict]:
+    return _records(q.inter_institutional_trend(min_year, max_year))
+
+
 @app.get("/api/member/{member_id}")
 def member(member_id: int, min_year: int | None = None, max_year: int | None = None) -> dict:
     """Full profile for one member (identity, metrics, topics, co-authors)."""

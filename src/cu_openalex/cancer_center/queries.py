@@ -49,6 +49,10 @@ def connect() -> duckdb.DuckDBPyConnection:
                 "Run `python -m cu_openalex.cancer_center.build`."
             )
         con.execute(f"CREATE VIEW {name} AS SELECT * FROM '{path}'")
+    # institutions is optional (added later); register it if present.
+    inst = cc_target("institutions")
+    if Path(inst).exists():
+        con.execute(f"CREATE VIEW institutions AS SELECT * FROM '{inst}'")
     return con
 
 
@@ -104,6 +108,8 @@ def kpi_summary(min_year: int | None = None, max_year: int | None = None) -> dic
             count(*) FILTER (WHERE collaboration_class != 'solo') AS n_collaborative,
             round(100.0 * avg(is_inter_program::int), 1) AS pct_inter_program,
             round(100.0 * avg(is_intra_program::int), 1) AS pct_intra_program,
+            round(100.0 * avg(has_external_collab::int), 1) AS pct_inter_institutional,
+            round(100.0 * avg(is_international::int), 1) AS pct_international,
             count(*) FILTER (WHERE fwci >= 2) AS high_impact_fwci2
         FROM works WHERE {yc}
         """
@@ -240,6 +246,41 @@ def program_collaboration_matrix(
             GROUP BY 1, 2
         )
         SELECT * FROM diagonal UNION ALL SELECT * FROM offdiag ORDER BY prog_a, prog_b
+        """
+    )
+
+
+# --- Inter-institutional collaboration ---------------------------------------
+
+
+def top_collaborators(
+    min_year: int | None = None, max_year: int | None = None, limit: int = 20
+) -> pl.DataFrame:
+    """Top external institutions by co-authored publications (with country)."""
+    yc = _year_clause(min_year, max_year, col="w.publication_year")
+    return run_sql(
+        f"""
+        SELECT i.institution_name AS institution, i.country_code AS country,
+               count(DISTINCT i.work_id) AS publications
+        FROM institutions i JOIN works w USING (work_id)
+        WHERE NOT i.is_home AND {yc} AND i.institution_name IS NOT NULL
+        GROUP BY 1, 2 ORDER BY publications DESC LIMIT {limit}
+        """
+    )
+
+
+def inter_institutional_trend(
+    min_year: int | None = None, max_year: int | None = None
+) -> pl.DataFrame:
+    """Per-year share of inter-institutional and international publications."""
+    yc = _year_clause(min_year, max_year)
+    return run_sql(
+        f"""
+        SELECT publication_year,
+               round(100.0 * avg(has_external_collab::int), 1) AS pct_inter_institutional,
+               round(100.0 * avg(is_international::int), 1) AS pct_international,
+               count(*) AS publications
+        FROM works WHERE {yc} GROUP BY 1 ORDER BY 1
         """
     )
 

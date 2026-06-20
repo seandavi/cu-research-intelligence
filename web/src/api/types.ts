@@ -21,6 +21,8 @@ export interface Kpi {
   n_collaborative: number;
   pct_inter_program: number;
   pct_intra_program: number;
+  pct_inter_institutional: number;
+  pct_international: number;
   high_impact_fwci2: number;
   members_all: number;
   members_active: number;
@@ -86,6 +88,19 @@ export interface ChatResponse {
   queries: string[];
   table: Record<string, unknown>[] | null;
   error: string | null;
+}
+
+export interface CollaboratorRow {
+  institution: string;
+  country: string | null;
+  publications: number;
+}
+
+export interface InterInstTrendRow {
+  publication_year: number;
+  pct_inter_institutional: number;
+  pct_international: number;
+  publications: number;
 }
 
 export interface MemberProfile {

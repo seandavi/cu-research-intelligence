@@ -5,6 +5,7 @@ import { YearFilter } from "./components/ui";
 import { useMeta } from "./hooks/useApi";
 import { Overview } from "./pages/Overview";
 import { Programs } from "./pages/Programs";
+import { Institutions } from "./pages/Institutions";
 import { Networks } from "./pages/Networks";
 import { Members } from "./pages/Members";
 import { MemberProfile } from "./pages/MemberProfile";
@@ -27,6 +28,7 @@ export function App() {
       <Route element={<Layout />}>
         <Route index element={<WithFilter range={range} setRange={setRange}>{(r) => <Overview range={r} />}</WithFilter>} />
         <Route path="programs" element={<WithFilter range={range} setRange={setRange}>{(r) => <Programs range={r} />}</WithFilter>} />
+        <Route path="institutions" element={<WithFilter range={range} setRange={setRange}>{(r) => <Institutions range={r} />}</WithFilter>} />
         <Route path="networks" element={<WithFilter range={range} setRange={setRange}>{(r) => <Networks range={r} />}</WithFilter>} />
         <Route path="members" element={<WithFilter range={range} setRange={setRange}>{(r) => <Members range={r} />}</WithFilter>} />
         <Route path="members/:id" element={<WithFilter range={range} setRange={setRange}>{(r) => <MemberProfile range={r} />}</WithFilter>} />

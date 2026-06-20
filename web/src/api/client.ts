@@ -4,6 +4,8 @@
 import type {
   ChatResponse,
   CollaborationTrendRow,
+  CollaboratorRow,
+  InterInstTrendRow,
   Kpi,
   MatrixCell,
   MemberProfile,
@@ -47,6 +49,10 @@ export const api = {
     get<TopicRow[]>("/top-topics", { ...yr(r), program, field_level: fieldLevel, limit }),
   members: (r?: YearRange) => get<MemberRow[]>("/members", yr(r)),
   member: (id: number, r?: YearRange) => get<MemberProfile>(`/member/${id}`, yr(r)),
+  topCollaborators: (r?: YearRange, limit = 20) =>
+    get<CollaboratorRow[]>("/top-collaborators", { ...yr(r), limit }),
+  interInstTrend: (r?: YearRange) =>
+    get<InterInstTrendRow[]>("/inter-institutional-trend", yr(r)),
   network: (r?: YearRange, minShared = 2, program?: string) =>
     get<NetworkData>("/network", { ...yr(r), min_shared: minShared, program }),
   chat: async (question: string, history?: unknown[]): Promise<ChatResponse> => {

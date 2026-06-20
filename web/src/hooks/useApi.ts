@@ -39,6 +39,16 @@ export const useTopTopics = (r?: YearRange, program?: string, fieldLevel = "topi
 export const useMembers = (r?: YearRange) =>
   useQuery({ queryKey: key("members", r), queryFn: () => api.members(r), enabled: !!r });
 
+export const useTopCollaborators = (r?: YearRange, limit = 20) =>
+  useQuery({
+    queryKey: key("collab", r, limit),
+    queryFn: () => api.topCollaborators(r, limit),
+    enabled: !!r,
+  });
+
+export const useInterInstTrend = (r?: YearRange) =>
+  useQuery({ queryKey: key("iitrend", r), queryFn: () => api.interInstTrend(r), enabled: !!r });
+
 export const useMemberProfile = (id: number | undefined, r?: YearRange) =>
   useQuery({
     queryKey: key("member", r, id),

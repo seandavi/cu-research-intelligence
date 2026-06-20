@@ -45,6 +45,25 @@ def current_programs_sql() -> str:
     return "(" + ", ".join("'" + p.replace("'", "''") + "'" for p in CURRENT_PROGRAMS) + ")"
 
 
+# The center's "home" institutions (the Anschutz Medical Campus complex). A
+# publication is *inter-institutional* when it has a co-author affiliated with any
+# institution outside this set. Bare OpenAlex institution ids.
+HOME_INSTITUTIONS: frozenset[str] = frozenset(
+    {
+        "I51713134",  # University of Colorado Anschutz Medical Campus
+        "I921990950",  # University of Colorado Denver
+        "I151808059",  # Colorado School of Public Health
+        "I4210096275",  # Children's Hospital Colorado
+        "I4210134151",  # University of Colorado Cancer Center
+    }
+)
+
+
+def home_institutions_sql() -> str:
+    """SQL list literal of home institution ids for an ``IN (...)`` filter."""
+    return "(" + ", ".join(f"'{i}'" for i in sorted(HOME_INSTITUTIONS)) + ")"
+
+
 # OpenAlex work ``type`` values that count as a peer-reviewed publication for
 # CCSG reporting. Excludes preprint, supplementary-materials, dataset, paratext,
 # peer-review, etc. A 2023 OpenAlex bulk-index event injected thousands of

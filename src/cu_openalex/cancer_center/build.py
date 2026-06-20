@@ -24,12 +24,18 @@ import polars as pl
 from ..storage import duckdb_connect
 from .members import load_members
 from .paths import cc_target
-from .programs import MAX_VALID_YEAR, MIN_VALID_YEAR, publication_types_sql
+from .programs import (
+    MAX_VALID_YEAR,
+    MIN_VALID_YEAR,
+    home_institutions_sql,
+    publication_types_sql,
+)
 from .resolve import build_crosswalk
 
 _WORKS_GLOB = "data/openalex/works/**/*.parquet"
 _RAW_WORKS_GLOB = "data/openalex/raw/works/**/*.parquet"
 _AUTHORS_GLOB = "data/openalex/authors/current/authors.parquet"
+_INSTITUTIONS_GLOB = "data/openalex/dimensions/institutions/*.parquet"
 
 # OpenAlex author disambiguation occasionally conflates many distinct people
 # (esp. common names) into one author_id with an impossible works_count. No real
@@ -61,6 +67,55 @@ def _author_program_map(crosswalk: pl.DataFrame) -> pl.DataFrame:
             "is_real_program",
             "is_active",
         )
+    )
+
+
+def _build_institutions(con) -> None:
+    """Extract per-cc-work institutions and the inter-institutional aggregates.
+
+    Creates ``inst_agg`` (used by ``work_meta``) and writes ``institutions``
+    (the work×institution bridge: id, name, country_code, is_home) for the
+    collaborator-ranking queries. Requires ``cc_workids`` to exist.
+    """
+    import glob as _glob
+
+    home = home_institutions_sql()
+    con.execute(
+        f"""
+        CREATE TABLE work_inst AS
+        SELECT DISTINCT w.work_id,
+               regexp_replace(json_extract_string(i.value, '$.id'), '.*/', '') AS institution_id,
+               json_extract_string(i.value, '$.display_name') AS institution_name
+        FROM '{_WORKS_GLOB}' w JOIN cc_workids c USING (work_id),
+             UNNEST(json_extract(w.authorships_json, '$[*].institutions[*]')) AS i(value)
+        WHERE json_extract_string(i.value, '$.id') IS NOT NULL
+        """
+    )
+    # Join the institutions dimension for country (if it has been built).
+    if _glob.glob(_INSTITUTIONS_GLOB):
+        country = f"LEFT JOIN '{_INSTITUTIONS_GLOB}' d USING (institution_id)"
+        country_col = "d.country_code"
+    else:
+        country, country_col = "", "CAST(NULL AS VARCHAR)"
+    con.execute(
+        f"""
+        CREATE TABLE institutions AS
+        SELECT wi.work_id, wi.institution_id, wi.institution_name,
+               {country_col} AS country_code,
+               (wi.institution_id IN {home}) AS is_home
+        FROM work_inst wi {country}
+        """
+    )
+    con.execute(f"COPY institutions TO '{cc_target('institutions')}' (FORMAT PARQUET)")
+    con.execute(
+        """
+        CREATE TABLE inst_agg AS
+        SELECT work_id,
+               count(DISTINCT institution_id) AS n_institutions,
+               bool_or(NOT is_home) AS has_external_collab,
+               bool_or(country_code IS NOT NULL AND country_code <> 'US') AS is_international
+        FROM institutions GROUP BY work_id
+        """
     )
 
 
@@ -157,6 +212,10 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
             GROUP BY work_id
             """
         )
+        # Institutions per cc work (from authorships_json), joined to the
+        # institutions dimension for country. Drives inter-institutional metrics.
+        _build_institutions(con)
+
         con.execute(
             f"""
             CREATE TABLE work_meta AS
@@ -167,7 +226,10 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                    -- supplements (issue like "14_suppl"). Excluded from pubs.
                    (w.title ILIKE 'Abstract %' OR lower(il.issue) LIKE '%suppl%')
                        AS is_meeting_abstract,
-                   rc.rcr, rc.nih_percentile
+                   rc.rcr, rc.nih_percentile,
+                   COALESCE(ia.n_institutions, 0) AS n_institutions,
+                   COALESCE(ia.has_external_collab, FALSE) AS has_external_collab,
+                   COALESCE(ia.is_international, FALSE) AS is_international
             FROM '{_WORKS_GLOB}' w
             JOIN cc_workids c USING (work_id)
             LEFT JOIN issue_lookup il USING (work_id)
@@ -175,6 +237,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                 ON dp.doi = regexp_replace(lower(w.doi), '^https?://(dx\\.)?doi\\.org/', '')
             LEFT JOIN rcr_cw rc
                 ON rc.pmid = COALESCE(NULLIF(w.pmid, ''), dp.pmid)
+            LEFT JOIN inst_agg ia USING (work_id)
             """
         )
 
@@ -239,6 +302,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                        a.any_active_member,
                        COALESCE(i.max_in_one_program, 0) AS max_in_one_program,
                        m.is_meeting_abstract,
+                       m.n_institutions, m.has_external_collab, m.is_international,
                        -- Peer-reviewed publication? Excludes preprints, supplementary-
                        -- materials, datasets, paratext, AND meeting abstracts (ADR-0013).
                        (w.type IN {pub_types} AND NOT m.is_meeting_abstract) AS is_publication,
@@ -264,6 +328,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
         "members": members_path,
         "member_works": member_works_path,
         "works": works_path,
+        "institutions": cc_target("institutions"),
     }
 
 
