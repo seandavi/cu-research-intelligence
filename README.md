@@ -175,9 +175,36 @@ natural-language interface that turns questions into read-only SQL with Claude
 **Method & caveats** (ADR-0013): members are matched by ORCID + name with a
 recorded confidence tier; ~700/1,143 resolve, so collaboration counts are lower
 bounds. A conflation guard drops OpenAlex `author_id`s with impossible
-`works_count`. Within-year *ratios* (collaboration %, OA %, FWCI) are more
-reliable than absolute counts, which undercount for the most recent years
-(OpenAlex indexing lag). The dashboard surfaces these caveats inline.
+`works_count`. Counts are peer-reviewed articles & reviews — preprints,
+supplementary files, datasets, and **conference abstracts** are excluded.
+Within-year *ratios* (collaboration %, OA %, FWCI, RCR) are more reliable than
+absolute counts, which undercount for the most recent years (OpenAlex indexing
+lag). The dashboard surfaces these caveats inline.
+
+**Impact metrics**: field-weighted citation impact (FWCI) ships in the curated
+works; NIH iCite **RCR** and a DOI→PMID backfill are added by
+`cancer_center.enrich` (resumable caches under `data/cancer_center/enrich/`) and
+merged on the next `build`. RCR (1.0 = median NIH-funded paper) is the most
+NCI-native metric and is the dashboard's headline impact figure.
+
+### Headless API (FastAPI + DuckDB)
+
+The same query layer is exposed as a JSON API for a custom frontend — no
+database server (DuckDB reads the curated Parquet in-process):
+
+```bash
+uv run --extra api uvicorn cu_openalex.cancer_center.api:app --reload
+# GET /api/kpi · /api/program-summary · /api/program-collaboration-matrix
+# GET /api/publications-by-year · /api/top-topics · /api/members · /api/meta
+# POST /api/chat  {question}   (NL→SQL; needs ANTHROPIC_API_KEY)
+```
+
+Containerized deploy behind an existing **Traefik** (mounts the curated tables
+read-only, no DB to run):
+
+```bash
+docker compose up -d --build   # edit the Host()/certresolver labels first
+```
 
 ## Decisions
 

@@ -1,0 +1,57 @@
+# Cancer-center research-intelligence API, fronted by an existing Traefik.
+#
+# Assumes Traefik is already running and attached to an external Docker network
+# (named `traefik` here — change to match yours). The curated Parquet tables are
+# mounted read-only; rebuild them on the host with
+#   uv run python -m cu_openalex.cancer_center.build
+# No database server: the API reads the Parquet through DuckDB in-process.
+#
+#   docker compose up -d --build
+
+services:
+  api:
+    build: .
+    image: cu-openalex-api:latest
+    restart: unless-stopped
+    environment:
+      # Enable /api/chat; omit to run analytics-only.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      # Lock CORS to your frontend origin(s) in production (comma-separated).
+      CU_OPENALEX_CORS_ORIGINS: ${CU_OPENALEX_CORS_ORIGINS:-*}
+    volumes:
+      # Curated tables (and enrich caches) — read-only.
+      - ./data/cancer_center:/app/data/cancer_center:ro
+    networks:
+      - traefik
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      # Adjust host + certresolver to your Traefik setup.
+      - "traefik.http.routers.uccc-api.rule=Host(`uccc-api.example.org`)"
+      - "traefik.http.routers.uccc-api.entrypoints=websecure"
+      - "traefik.http.routers.uccc-api.tls=true"
+      - "traefik.http.routers.uccc-api.tls.certresolver=letsencrypt"
+      - "traefik.http.services.uccc-api.loadbalancer.server.port=8000"
+      # Optional: gate behind Traefik basic-auth / forward-auth (recommended for
+      # an EAB/leadership tool). Example forward-auth middleware reference:
+      # - "traefik.http.routers.uccc-api.middlewares=uccc-auth@file"
+
+  # The React SPA is built separately and served as static files — wire it in
+  # here once it exists (e.g. an nginx image on the same Traefik network), or
+  # serve it from your existing static host. Placeholder for the next step.
+  #
+  # web:
+  #   image: cu-openalex-web:latest
+  #   restart: unless-stopped
+  #   networks: [traefik]
+  #   labels:
+  #     - "traefik.enable=true"
+  #     - "traefik.http.routers.uccc-web.rule=Host(`uccc.example.org`)"
+  #     - "traefik.http.routers.uccc-web.entrypoints=websecure"
+  #     - "traefik.http.routers.uccc-web.tls=true"
+  #     - "traefik.http.services.uccc-web.loadbalancer.server.port=80"
+
+networks:
+  # Externally-managed network that your Traefik instance is attached to.
+  traefik:
+    external: true

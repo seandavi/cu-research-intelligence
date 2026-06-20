@@ -33,6 +33,11 @@ dashboard = [
     "pyvis>=0.3.2",
     "streamlit>=1.58.0",
 ]
+api = [
+    "anthropic>=0.111.0",
+    "fastapi>=0.136.3",
+    "uvicorn[standard]>=0.48.0",
+]
 
 [build-system]
 requires = ["uv_build>=0.8.11,<0.9.0"]
