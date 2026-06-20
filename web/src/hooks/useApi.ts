@@ -29,6 +29,13 @@ export const useCollaborationMatrix = (r?: YearRange, currentOnly = true) =>
     enabled: !!r,
   });
 
+export const useProgramCombinations = (r?: YearRange, currentOnly = true) =>
+  useQuery({
+    queryKey: key("combos", r, currentOnly),
+    queryFn: () => api.programCombinations(r, currentOnly),
+    enabled: !!r,
+  });
+
 export const useTopTopics = (r?: YearRange, program?: string, fieldLevel = "topic_field") =>
   useQuery({
     queryKey: key("topics", r, `${program}:${fieldLevel}`),

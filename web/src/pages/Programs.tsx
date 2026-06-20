@@ -10,14 +10,20 @@ import {
 } from "recharts";
 import type { YearRange } from "../api/types";
 import { Heatmap } from "../components/Heatmap";
+import { UpsetPlot } from "../components/UpsetPlot";
 import { Card, Caveat, ErrorNote, Loading } from "../components/ui";
-import { useCollaborationMatrix, useProgramSummary } from "../hooks/useApi";
+import {
+  useCollaborationMatrix,
+  useProgramCombinations,
+  useProgramSummary,
+} from "../hooks/useApi";
 import { downloadCsv, fmtInt, fmtNum, shorten } from "../lib/format";
 
 export function Programs({ range }: { range: YearRange }) {
   const [currentOnly, setCurrentOnly] = useState(true);
   const summary = useProgramSummary(range, currentOnly);
   const matrix = useCollaborationMatrix(range, currentOnly);
+  const combos = useProgramCombinations(range, currentOnly);
 
   if (summary.isLoading || matrix.isLoading) return <Loading />;
   if (summary.error) return <ErrorNote error={summary.error} />;
@@ -44,6 +50,15 @@ export function Programs({ range }: { range: YearRange }) {
           members of that program), not total output.
         </p>
         {matrix.data && <Heatmap cells={matrix.data} programs={programs} />}
+      </Card>
+
+      <Card title="Program combinations (UpSet)">
+        <p className="hint">
+          Publications by the exact set of programs that co-author them. Single-program bars are
+          intra-only; multi-program bars are the inter-programmatic intersections the pairwise
+          heatmap can't show (e.g. three programs on one paper).
+        </p>
+        {combos.data && <UpsetPlot combos={combos.data} />}
       </Card>
 
       <div className="grid-2">

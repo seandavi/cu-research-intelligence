@@ -64,6 +64,11 @@ export interface MatrixCell {
   publications: number;
 }
 
+export interface ProgramCombination {
+  programs: string[];
+  count: number;
+}
+
 export interface TopicRow {
   topic: string;
   publications: number;

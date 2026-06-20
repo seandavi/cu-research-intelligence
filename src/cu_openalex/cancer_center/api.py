@@ -108,6 +108,13 @@ def program_collaboration_matrix(
     return _records(q.program_collaboration_matrix(min_year, max_year, current_only=current_only))
 
 
+@app.get("/api/program-combinations")
+def program_combinations(
+    min_year: int | None = None, max_year: int | None = None, current_only: bool = True
+) -> list[dict]:
+    return _records(q.program_combinations(min_year, max_year, current_only=current_only))
+
+
 @app.get("/api/top-topics")
 def top_topics(
     program: str | None = None,

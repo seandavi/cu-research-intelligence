@@ -250,6 +250,42 @@ def program_collaboration_matrix(
     )
 
 
+def program_combinations(
+    min_year: int | None = None,
+    max_year: int | None = None,
+    current_only: bool = True,
+) -> pl.DataFrame:
+    """Publication counts per *set* of programs (for an UpSet plot).
+
+    Each row is a distinct combination of programs that co-author publications
+    together (e.g. ``[Developmental Therapeutics, Tumor-Host Interactions]``) and
+    the number of publications spanning exactly that set. Single-program sets are
+    intra-only; multi-program sets are the inter-programmatic intersections.
+    """
+    yc = _year_clause(min_year, max_year)
+    prog_filter = (
+        f"AND program IN {current_programs_sql()}"
+        if current_only
+        else "AND program NOT IN ('', 'Unknown/ Unaffiliated/ Emeritus')"
+    )
+    return run_sql(
+        f"""
+        WITH wp AS (
+            SELECT w.work_id, UNNEST(w.programs) AS program
+            FROM works w WHERE {yc}
+        ),
+        combos AS (
+            SELECT work_id, list_sort(array_agg(DISTINCT program)) AS programs
+            FROM wp WHERE program IS NOT NULL {prog_filter}
+            GROUP BY work_id
+        )
+        SELECT programs, count(*) AS count
+        FROM combos WHERE len(programs) >= 1
+        GROUP BY programs ORDER BY count DESC
+        """
+    )
+
+
 # --- Inter-institutional collaboration ---------------------------------------
 
 

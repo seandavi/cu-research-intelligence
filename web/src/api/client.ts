@@ -12,6 +12,7 @@ import type {
   MemberRow,
   Meta,
   NetworkData,
+  ProgramCombination,
   ProgramSummaryRow,
   PublicationYearRow,
   TopicRow,
@@ -45,6 +46,8 @@ export const api = {
     get<ProgramSummaryRow[]>("/program-summary", { ...yr(r), current_only: currentOnly }),
   collaborationMatrix: (r?: YearRange, currentOnly = true) =>
     get<MatrixCell[]>("/program-collaboration-matrix", { ...yr(r), current_only: currentOnly }),
+  programCombinations: (r?: YearRange, currentOnly = true) =>
+    get<ProgramCombination[]>("/program-combinations", { ...yr(r), current_only: currentOnly }),
   topTopics: (r?: YearRange, program?: string, fieldLevel = "topic_field", limit = 20) =>
     get<TopicRow[]>("/top-topics", { ...yr(r), program, field_level: fieldLevel, limit }),
   members: (r?: YearRange) => get<MemberRow[]>("/members", yr(r)),
