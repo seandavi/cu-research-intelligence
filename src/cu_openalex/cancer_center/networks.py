@@ -128,6 +128,36 @@ def build_member_graph(
     return g
 
 
+def member_network_data(
+    min_year: int | None = None,
+    max_year: int | None = None,
+    min_shared: int = 2,
+    program: str | None = None,
+) -> dict:
+    """Serializable co-authorship graph for the API / a JS graph renderer.
+
+    Returns ``{"nodes": [...], "edges": [...]}`` where each node carries
+    ``id, name, program, publications, degree, betweenness`` and each edge
+    ``source, target, weight``.
+    """
+    g = build_member_graph(min_year, max_year, min_shared=min_shared, program=program)
+    nodes = [
+        {
+            "id": n,
+            "name": d.get("name", n),
+            "program": d.get("program", "Unknown"),
+            "publications": d.get("publications", 0),
+            "degree": d.get("degree", 0),
+            "betweenness": d.get("betweenness", 0.0),
+        }
+        for n, d in g.nodes(data=True)
+    ]
+    edges = [
+        {"source": a, "target": b, "weight": d.get("weight", 1)} for a, b, d in g.edges(data=True)
+    ]
+    return {"nodes": nodes, "edges": edges}
+
+
 def build_program_graph(min_year: int | None = None, max_year: int | None = None) -> nx.Graph:
     """Program collaboration graph (nodes=programs, edges=shared publications)."""
     matrix = q.program_collaboration_matrix(min_year, max_year)

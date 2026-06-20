@@ -607,6 +607,7 @@ dependencies = [
 api = [
     { name = "anthropic" },
     { name = "fastapi" },
+    { name = "networkx" },
     { name = "uvicorn", extra = ["standard"] },
 ]
 dashboard = [
@@ -634,6 +635,7 @@ requires-dist = [
     { name = "fastexcel", specifier = ">=0.20.2" },
     { name = "fsspec", specifier = ">=2026.4.0" },
     { name = "httpx", specifier = ">=0.28.1" },
+    { name = "networkx", marker = "extra == 'api'", specifier = ">=3.6.1" },
     { name = "networkx", marker = "extra == 'dashboard'", specifier = ">=3.6.1" },
     { name = "openpyxl", specifier = ">=3.1.5" },
     { name = "plotly", marker = "extra == 'dashboard'", specifier = ">=6.8.0" },

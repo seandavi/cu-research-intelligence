@@ -88,6 +88,26 @@ export interface ChatResponse {
   error: string | null;
 }
 
+export interface NetworkNode {
+  id: number;
+  name: string;
+  program: string;
+  publications: number;
+  degree: number;
+  betweenness: number;
+}
+
+export interface NetworkEdge {
+  source: number;
+  target: number;
+  weight: number;
+}
+
+export interface NetworkData {
+  nodes: NetworkNode[];
+  edges: NetworkEdge[];
+}
+
 export interface YearRange {
   minYear: number;
   maxYear: number;

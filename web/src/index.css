@@ -99,5 +99,13 @@ table.data.compact th, table.data.compact td { padding: 0.3rem 0.5rem; font-size
 .composer { display: flex; gap: 0.5rem; }
 .composer input { flex: 1; padding: 0.6rem 0.7rem; border: 1px solid var(--line); border-radius: 8px; }
 
+/* Network */
+.net-stats { display: flex; gap: 1.5rem; color: var(--muted); margin: 0.4rem 0 0.8rem; font-size: 0.95rem; }
+.net-stats span strong { color: var(--ink); }
+.network-wrap { border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.legend { display: flex; flex-wrap: wrap; gap: 0.3rem 1rem; margin-bottom: 0.6rem; font-size: 0.8rem; color: var(--muted); }
+.legend-item { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
+.legend .swatch { width: 11px; height: 11px; border-radius: 2px; display: inline-block; }
+
 .loading { color: var(--muted); padding: 2rem 0; }
 .error { color: #c53030; background: #fdeaea; padding: 0.6rem 0.8rem; border-radius: 8px; }

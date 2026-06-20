@@ -24,7 +24,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import chat
+from . import chat, networks
 from . import queries as q
 from .programs import CURRENT_PROGRAMS
 
@@ -122,6 +122,17 @@ def top_topics(
 @app.get("/api/members")
 def members(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
     return _records(q.member_directory(min_year, max_year))
+
+
+@app.get("/api/network")
+def network(
+    min_year: int | None = None,
+    max_year: int | None = None,
+    min_shared: int = Query(2, ge=1, le=20),
+    program: str | None = None,
+) -> dict:
+    """Member co-authorship graph (nodes + edges) with degree / betweenness."""
+    return networks.member_network_data(min_year, max_year, min_shared=min_shared, program=program)
 
 
 # --- Chat (NL → read-only SQL) ----------------------------------------------
