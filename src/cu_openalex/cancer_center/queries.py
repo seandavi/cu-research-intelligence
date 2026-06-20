@@ -11,6 +11,7 @@ queries are sub-second over the ~136k-row works table.
 from __future__ import annotations
 
 import functools
+import threading
 from pathlib import Path
 
 import duckdb
@@ -18,6 +19,13 @@ import polars as pl
 
 from .paths import cc_target
 from .programs import current_programs_sql
+
+# A single in-memory DuckDB connection is shared across calls. DuckDB connections
+# are not safe for concurrent use from multiple threads, and the FastAPI service
+# runs sync endpoints in a threadpool — so all query execution is serialized
+# through this lock. Queries are sub-second, so the contention cost is negligible
+# (and the lock is uncontended under single-threaded Streamlit).
+_LOCK = threading.RLock()
 
 # Headline analysis window. Recent years (>= CUTOFF_RECENT) carry an OpenAlex
 # indexing-lag caveat; trend charts annotate this.
@@ -45,8 +53,13 @@ def connect() -> duckdb.DuckDBPyConnection:
 
 
 def run_sql(sql: str) -> pl.DataFrame:
-    """Execute read-only SQL against the cc views; return a Polars frame."""
-    return connect().sql(sql).pl()
+    """Execute read-only SQL against the cc views; return a Polars frame.
+
+    Serialized via ``_LOCK`` so concurrent API requests can't corrupt the shared
+    DuckDB connection.
+    """
+    with _LOCK:
+        return connect().sql(sql).pl()
 
 
 def _year_clause(
@@ -76,11 +89,9 @@ def _year_clause(
 
 def kpi_summary(min_year: int | None = None, max_year: int | None = None) -> dict:
     """Top-line numbers for the leadership overview."""
-    con = connect()
     yc = _year_clause(min_year, max_year)
-    works = (
-        con.sql(
-            f"""
+    works = run_sql(
+        f"""
         SELECT
             count(*) AS publications,
             sum(cited_by_count)::BIGINT AS citations,
@@ -96,13 +107,9 @@ def kpi_summary(min_year: int | None = None, max_year: int | None = None) -> dic
             count(*) FILTER (WHERE fwci >= 2) AS high_impact_fwci2
         FROM works WHERE {yc}
         """
-        )
-        .pl()
-        .to_dicts()[0]
-    )
-    members = (
-        con.sql(
-            """
+    ).to_dicts()[0]
+    members = run_sql(
+        """
         SELECT
             count(*) AS members_all,
             count(*) FILTER (WHERE is_active) AS members_active,
@@ -110,10 +117,7 @@ def kpi_summary(min_year: int | None = None, max_year: int | None = None) -> dic
             count(*) FILTER (WHERE is_active AND author_id IS NOT NULL) AS active_resolved
         FROM members
         """
-        )
-        .pl()
-        .to_dicts()[0]
-    )
+    ).to_dicts()[0]
     return {**works, **members}
 
 

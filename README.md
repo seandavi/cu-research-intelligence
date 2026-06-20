@@ -199,12 +199,28 @@ uv run --extra api uvicorn cu_openalex.cancer_center.api:app --reload
 # POST /api/chat  {question}   (NL→SQL; needs ANTHROPIC_API_KEY)
 ```
 
-Containerized deploy behind an existing **Traefik** (mounts the curated tables
-read-only, no DB to run):
+### React frontend (`web/`)
+
+A Vite + React + TypeScript SPA consumes the API — Overview (KPIs + trends),
+Program Collaboration (heatmap + CCSG table + CSV export), Members, and Ask
+(chat). It talks to the API through a typed client (`web/src/api/`).
+
+```bash
+cd web && npm install && npm run dev   # proxies /api → http://localhost:8000
+```
+
+### Containerized deploy behind an existing **Traefik**
+
+`docker compose` builds two services — `api` (FastAPI + DuckDB, internal) and
+`web` (nginx serving the SPA and reverse-proxying `/api` → `api:8000`, the only
+public service). The curated tables mount read-only; no database to run.
 
 ```bash
 docker compose up -d --build   # edit the Host()/certresolver labels first
 ```
+
+Set `ANTHROPIC_API_KEY` (for chat) and gate the `web` router behind Traefik
+auth for an EAB/leadership audience.
 
 ## Decisions
 

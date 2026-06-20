@@ -1,0 +1,121 @@
+import { useState } from "react";
+import { useMutation } from "@tanstack/react-query";
+import { api } from "../api/client";
+import type { ChatResponse } from "../api/types";
+import { Card } from "../components/ui";
+
+const EXAMPLES = [
+  "Which programs collaborate most with Cancer Prevention & Control?",
+  "Top 10 most-cited publications since 2020 and their journals.",
+  "How has inter-programmatic collaboration changed over the last decade?",
+  "What share of our publications are open access by program?",
+];
+
+interface Turn {
+  question: string;
+  response?: ChatResponse;
+}
+
+export function Ask() {
+  const [turns, setTurns] = useState<Turn[]>([]);
+  const [input, setInput] = useState("");
+
+  const ask = useMutation({
+    mutationFn: (q: string) => api.chat(q),
+    onSuccess: (response, q) =>
+      setTurns((t) => t.map((turn) => (turn.question === q && !turn.response ? { ...turn, response } : turn))),
+  });
+
+  const submit = (q: string) => {
+    if (!q.trim()) return;
+    setTurns((t) => [...t, { question: q }]);
+    setInput("");
+    ask.mutate(q);
+  };
+
+  return (
+    <div className="ask">
+      <h1>Ask the Data</h1>
+      <p className="lede">
+        Plain-English questions, answered by querying the cancer-center tables live — every number
+        is backed by a SQL query you can inspect.
+      </p>
+
+      {turns.length === 0 && (
+        <div className="examples">
+          {EXAMPLES.map((ex) => (
+            <button key={ex} onClick={() => submit(ex)}>
+              {ex}
+            </button>
+          ))}
+        </div>
+      )}
+
+      <div className="chat-log">
+        {turns.map((t, i) => (
+          <div key={i} className="turn">
+            <div className="msg user">{t.question}</div>
+            {t.response ? <Answer response={t.response} /> : <div className="msg assistant muted">Querying…</div>}
+          </div>
+        ))}
+        {ask.isError && <div className="error">Request failed: {String(ask.error)}</div>}
+      </div>
+
+      <form
+        className="composer"
+        onSubmit={(e) => {
+          e.preventDefault();
+          submit(input);
+        }}
+      >
+        <input
+          placeholder="Ask about publications, programs, members, impact…"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+        />
+        <button type="submit" disabled={ask.isPending}>
+          Ask
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function Answer({ response }: { response: ChatResponse }) {
+  if (response.error) return <div className="msg assistant error">{response.error}</div>;
+  const table = response.table ?? [];
+  const cols = table.length ? Object.keys(table[0]) : [];
+  return (
+    <div className="msg assistant">
+      <div className="answer-text">{response.answer}</div>
+      {response.queries.map((sql, i) => (
+        <details key={i}>
+          <summary>SQL</summary>
+          <pre>{sql}</pre>
+        </details>
+      ))}
+      {table.length > 0 && (
+        <Card>
+          <table className="data compact">
+            <thead>
+              <tr>
+                {cols.map((c) => (
+                  <th key={c}>{c}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {table.slice(0, 50).map((row, i) => (
+                <tr key={i}>
+                  {cols.map((c) => (
+                    <td key={c}>{String(row[c] ?? "")}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
+    </div>
+  );
+}
