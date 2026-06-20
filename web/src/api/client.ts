@@ -6,6 +6,7 @@ import type {
   CollaborationTrendRow,
   Kpi,
   MatrixCell,
+  MemberProfile,
   MemberRow,
   Meta,
   NetworkData,
@@ -45,6 +46,7 @@ export const api = {
   topTopics: (r?: YearRange, program?: string, fieldLevel = "topic_field", limit = 20) =>
     get<TopicRow[]>("/top-topics", { ...yr(r), program, field_level: fieldLevel, limit }),
   members: (r?: YearRange) => get<MemberRow[]>("/members", yr(r)),
+  member: (id: number, r?: YearRange) => get<MemberProfile>(`/member/${id}`, yr(r)),
   network: (r?: YearRange, minShared = 2, program?: string) =>
     get<NetworkData>("/network", { ...yr(r), min_shared: minShared, program }),
   chat: async (question: string, history?: unknown[]): Promise<ChatResponse> => {

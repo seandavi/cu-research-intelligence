@@ -290,3 +290,88 @@ def member_directory(min_year: int | None = None, max_year: int | None = None) -
         GROUP BY ALL ORDER BY publications DESC
         """
     )
+
+
+def member_profile(
+    member_id: int, min_year: int | None = None, max_year: int | None = None
+) -> dict:
+    """Full detail for one member: identity, metrics, and breakdowns.
+
+    Returns a dict with ``member`` (identity), ``summary`` (window metrics),
+    ``by_year``, ``top_topics``, ``top_journals``, and ``top_coauthors`` (other
+    cancer-center members on shared publications).
+    """
+    yc = _year_clause(min_year, max_year, col="mw.publication_year")
+    member = run_sql(
+        f"""
+        SELECT Member_ID AS member_id, First_Name || ' ' || Last_Name AS name,
+               PrimaryProgram AS program, FacultyRank AS rank, Current_Status AS status,
+               Dept AS dept, School AS school, Email AS email,
+               confidence AS match_confidence, author_id, orcid
+        FROM members WHERE Member_ID = {member_id}
+        """
+    ).to_dicts()
+    if not member:
+        return {}
+    summary = run_sql(
+        f"""
+        SELECT count(DISTINCT mw.work_id) AS publications,
+               sum(mw.cited_by_count)::BIGINT AS citations,
+               round(avg(mw.fwci), 2) AS mean_fwci,
+               round(median(mw.rcr), 2) AS median_rcr,
+               round(100.0 * avg(mw.is_oa::int), 1) AS pct_open_access
+        FROM member_works mw WHERE mw.member_id = {member_id} AND {yc}
+        """
+    ).to_dicts()[0]
+    by_year = run_sql(
+        f"""
+        SELECT mw.publication_year AS publication_year, count(DISTINCT mw.work_id) AS publications,
+               sum(mw.cited_by_count)::BIGINT AS citations
+        FROM member_works mw WHERE mw.member_id = {member_id} AND {yc}
+        GROUP BY 1 ORDER BY 1
+        """
+    )
+    top_topics = run_sql(
+        f"""
+        SELECT mw.topic_field AS topic, count(DISTINCT mw.work_id) AS publications
+        FROM member_works mw
+        WHERE mw.member_id = {member_id} AND {yc} AND mw.topic_field IS NOT NULL
+        GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+        """
+    )
+    top_journals = run_sql(
+        f"""
+        SELECT mw.source_name AS journal, count(DISTINCT mw.work_id) AS publications
+        FROM member_works mw
+        WHERE mw.member_id = {member_id} AND {yc} AND mw.source_name IS NOT NULL
+        GROUP BY 1 ORDER BY 2 DESC LIMIT 10
+        """
+    )
+    # Co-authors: other cc members on this member's publications.
+    yc_w = _year_clause(min_year, max_year)
+    top_coauthors = run_sql(
+        f"""
+        WITH mine AS (
+            SELECT DISTINCT mw.work_id FROM member_works mw
+            WHERE mw.member_id = {member_id} AND {yc}
+        ),
+        co AS (
+            SELECT cm AS co_id, count(*) AS shared
+            FROM mine JOIN works w USING (work_id), UNNEST(w.cc_member_ids) AS t(cm)
+            WHERE {yc_w} AND cm <> {member_id}
+            GROUP BY 1
+        )
+        SELECT m.Member_ID AS member_id, m.First_Name || ' ' || m.Last_Name AS name,
+               m.PrimaryProgram AS program, co.shared
+        FROM co JOIN members m ON m.Member_ID = co.co_id
+        ORDER BY co.shared DESC LIMIT 12
+        """
+    )
+    return {
+        "member": member[0],
+        "summary": summary,
+        "by_year": by_year.to_dicts(),
+        "top_topics": top_topics.to_dicts(),
+        "top_journals": top_journals.to_dicts(),
+        "top_coauthors": top_coauthors.to_dicts(),
+    }

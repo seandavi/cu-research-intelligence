@@ -124,6 +124,15 @@ def members(min_year: int | None = None, max_year: int | None = None) -> list[di
     return _records(q.member_directory(min_year, max_year))
 
 
+@app.get("/api/member/{member_id}")
+def member(member_id: int, min_year: int | None = None, max_year: int | None = None) -> dict:
+    """Full profile for one member (identity, metrics, topics, co-authors)."""
+    profile = q.member_profile(member_id, min_year, max_year)
+    if not profile:
+        raise HTTPException(status_code=404, detail="member not found")
+    return profile
+
+
 @app.get("/api/network")
 def network(
     min_year: int | None = None,

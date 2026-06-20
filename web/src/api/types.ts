@@ -88,6 +88,33 @@ export interface ChatResponse {
   error: string | null;
 }
 
+export interface MemberProfile {
+  member: {
+    member_id: number;
+    name: string;
+    program: string;
+    rank: string;
+    status: string;
+    dept: string;
+    school: string;
+    email: string;
+    match_confidence: string | null;
+    author_id: string | null;
+    orcid: string | null;
+  };
+  summary: {
+    publications: number;
+    citations: number | null;
+    mean_fwci: number | null;
+    median_rcr: number | null;
+    pct_open_access: number | null;
+  };
+  by_year: { publication_year: number; publications: number; citations: number }[];
+  top_topics: { topic: string; publications: number }[];
+  top_journals: { journal: string; publications: number }[];
+  top_coauthors: { member_id: number; name: string; program: string; shared: number }[];
+}
+
 export interface NetworkNode {
   id: number;
   name: string;

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import type { YearRange } from "../api/types";
 import { Card, Caveat, ErrorNote, Loading } from "../components/ui";
 import { useMembers } from "../hooks/useApi";
@@ -59,7 +60,9 @@ export function Members({ range }: { range: YearRange }) {
           <tbody>
             {filtered.map((r) => (
               <tr key={r.member_id}>
-                <td>{r.name}</td>
+                <td>
+                  <Link to={`/members/${r.member_id}`}>{r.name}</Link>
+                </td>
                 <td>{r.program}</td>
                 <td>{r.rank}</td>
                 <td>{r.status}</td>

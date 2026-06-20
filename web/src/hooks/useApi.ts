@@ -39,6 +39,13 @@ export const useTopTopics = (r?: YearRange, program?: string, fieldLevel = "topi
 export const useMembers = (r?: YearRange) =>
   useQuery({ queryKey: key("members", r), queryFn: () => api.members(r), enabled: !!r });
 
+export const useMemberProfile = (id: number | undefined, r?: YearRange) =>
+  useQuery({
+    queryKey: key("member", r, id),
+    queryFn: () => api.member(id!, r),
+    enabled: !!r && id !== undefined,
+  });
+
 export const useNetwork = (r?: YearRange, minShared = 2, program?: string) =>
   useQuery({
     queryKey: key("network", r, `${minShared}:${program ?? ""}`),
