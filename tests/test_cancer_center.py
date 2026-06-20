@@ -9,7 +9,9 @@ intra/inter/solo rules (including the "both" overlap case).
 from __future__ import annotations
 
 import duckdb
+import pytest
 
+from cu_openalex.cancer_center.chat import UnsafeSQLError, run_safe_sql
 from cu_openalex.cancer_center.members import normalize_name, parse_orcid
 
 
@@ -86,3 +88,27 @@ def test_collaboration_classification():
     assert out["w_inter"] == (False, True, "inter_program")
     # the overlap case: both flags true, headline prioritizes inter
     assert out["w_both"] == (True, True, "inter_program")
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "DELETE FROM works",
+        "DROP TABLE members",
+        "SELECT 1; DROP TABLE works",
+        "INSERT INTO works VALUES (1)",
+        "UPDATE members SET program='x'",
+        "ATTACH 'evil.db'",
+        "COPY works TO 'out.csv'",
+        "PRAGMA database_list",
+    ],
+)
+def test_run_safe_sql_rejects_mutations(sql):
+    """The chat SQL guard must refuse anything that is not a read-only SELECT."""
+    with pytest.raises(UnsafeSQLError):
+        run_safe_sql(sql)
+
+
+def test_run_safe_sql_allows_select():
+    df = run_safe_sql("SELECT 1 AS n")
+    assert df["n"][0] == 1

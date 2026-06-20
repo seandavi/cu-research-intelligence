@@ -96,7 +96,8 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
         ).fetchone()[0]
         if n_dropped:
             print(
-                f"Excluded {n_dropped} conflated author_id(s) (works_count > {MAX_PLAUSIBLE_WORKS})."
+                f"Excluded {n_dropped} conflated author_id(s) "
+                f"(works_count > {MAX_PLAUSIBLE_WORKS})."
             )
 
         # work x cc-author bridge: explode work author lists, keep cc authors.

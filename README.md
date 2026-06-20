@@ -146,6 +146,39 @@ Set `CU_OPENALEX_STORAGE_BASE_URI=s3://your-bucket/openalex` and the `R2_*` vars
 in `.env`. No code change — DuckDB `COPY` and Polars both write S3-compatible
 objects; snapshot reads stay anonymous over HTTPS.
 
+## Cancer Center subsection
+
+A research-intelligence layer for the **University of Colorado Cancer Center**
+(UCCC) sits on top of the institution-wide tables: it resolves the membership
+roster (`data/external/Members-AllEver-withIDs_*.xlsx`) to OpenAlex authors,
+attributes works to research **programs**, and classifies every publication by
+collaboration type — the intra- vs inter-programmatic metrics an NIH Cancer
+Center Support Grant (CCSG / P30) External Advisory Board reviews. See
+**ADR-0013**.
+
+```bash
+# 1. Build the curated cohort tables (offline, from the works corpus; ~2s)
+uv run python -m cu_openalex.cancer_center.build
+#    -> data/cancer_center/{members,works,member_works}.parquet
+
+# 2. Launch the dashboard + chat (Streamlit, optional 'dashboard' extra)
+uv run --extra dashboard streamlit run \
+    src/cu_openalex/cancer_center/dashboard/Home.py
+```
+
+Pages: leadership **overview**, **publications** over time, **program
+collaboration** (the intra/inter heatmap + trends), research **expertise**,
+co-authorship **networks**, a **member** directory, and **Ask** — a
+natural-language interface that turns questions into read-only SQL with Claude
+(set `ANTHROPIC_API_KEY`; model via `CU_OPENALEX_CHAT_MODEL`).
+
+**Method & caveats** (ADR-0013): members are matched by ORCID + name with a
+recorded confidence tier; ~700/1,143 resolve, so collaboration counts are lower
+bounds. A conflation guard drops OpenAlex `author_id`s with impossible
+`works_count`. Within-year *ratios* (collaboration %, OA %, FWCI) are more
+reliable than absolute counts, which undercount for the most recent years
+(OpenAlex indexing lag). The dashboard surfaces these caveats inline.
+
 ## Decisions
 
 Architecture decisions live in [`docs/adr/`](docs/adr/). Tasks in
