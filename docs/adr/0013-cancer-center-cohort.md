@@ -93,7 +93,19 @@ These hardening steps came out of an independent multi-stakeholder review
   attributions. Solo (single-member) papers are reported separately from the
   intra/inter tally, per CCSG convention.
 - Rebuild is cheap and offline: `python -m cu_openalex.cancer_center.build`.
-- Not yet computed (future): inter-institutional collaboration % (needs
-  institution lists per work) and NIH iCite **RCR** (PMID-based; 45% pmid
-  coverage makes this feasible). FWCI is carried today as the field-normalized
-  impact metric.
+- **Meeting abstracts** (AACR `Abstract …` titles + conference `_suppl` issues)
+  are excluded from `is_publication` — they were ~3.4k of the corpus and the main
+  reason PMID coverage looked low. After exclusion, PMID coverage of real
+  publications rises ~61% → ~80%.
+- **Inter-institutional collaboration** is computed from `authorships_json`: a
+  work×institution bridge (`institutions.parquet`) + per-work flags
+  (`has_external_collab`, `is_international`, `n_institutions`), relative to the
+  `HOME_INSTITUTIONS` set (the Anschutz complex). ~85% inter-institutional, ~36%
+  international; top partners are other NCI cancer centers.
+- **NIH iCite RCR** and a **DOI→PMID backfill** are fetched by
+  `cancer_center.enrich` (resumable caches) and merged on the next build; RCR is
+  the headline impact metric (median ~1.2). FWCI is carried alongside.
+- **Member profiles** and a **co-authorship network** (with betweenness) expose
+  the data at the member and graph level.
+- Reporting **defaults to the most recent 7 complete years** (2018–2024) and to
+  the four **current programs**; both are user-overridable.

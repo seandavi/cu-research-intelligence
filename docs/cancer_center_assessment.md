@@ -40,17 +40,28 @@ was inflated ~21%.
 | Network is a poor first impression (UX) | Lead with the bridge-investigator table; add a program color legend. |
 | Unreadable FWCI color scale (UX) | Topic bars labeled with FWCI values. |
 
+## Delivered since the assessment
+
+- **iCite RCR** — the most NCI-native impact metric; now the headline figure
+  (median ~1.2) and per-program.
+- **Inter-institutional collaboration %** — work×institution bridge from
+  `authorships_json`; ~85% inter-institutional, ~36% international, top-collaborator
+  ranking (other NCI cancer centers). New dashboard/SPA page.
+- **Meeting-abstract exclusion** — removed the residual that depressed PMID
+  coverage and inflated counts.
+- **Member profile pages** and a **co-authorship network** (React + force graph).
+
 ## Open / deferred (tracked for next iteration)
 
 - **Entity-resolution precision audit** (EAB): hand-verify a sample of name
   matches and report a measured precision (target ≥95%), rather than asserting it.
 - **Collaboration sensitivity band** (EAB): quantify how much incomplete matching
   biases collaboration % (upper bound assuming unmatched co-authors are members).
-- **Inter-institutional collaboration %** and **iCite RCR** (PMID-based) —
-  scoped in ADR-0013; RCR is the most NCI-native impact metric.
 - **Researcher value gaps**: grants/funding linkage (OpenAlex grants are empty
-  upstream), per-member profile pages, biosketch/RPPR export, clinical-trial and
+  upstream — would need NIH RePORTER), biosketch/RPPR export, clinical-trial and
   trainee/mentorship ties.
+- **Co-citation / bibliographic-coupling networks** (from the original ask —
+  needs `referenced_works` curated from raw).
 - **Program taxonomy**: confirm the `Molecular Oncology → Molecular & Cellular
   Oncology` fold and the current program list against the center's official roster.
 - **Fractional / position-aware authorship** to temper honorary-authorship
