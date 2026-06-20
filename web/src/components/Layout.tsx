@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import { NavLink, Outlet } from "react-router-dom";
 
 const NAV = [
@@ -26,7 +27,9 @@ export function Layout() {
         </nav>
       </aside>
       <main className="content">
-        <Outlet />
+        <Suspense fallback={<div className="loading">Loading…</div>}>
+          <Outlet />
+        </Suspense>
       </main>
     </div>
   );

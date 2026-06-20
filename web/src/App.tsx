@@ -1,16 +1,23 @@
-import { useEffect, useState } from "react";
+import { lazy, useEffect, useState } from "react";
 import { Route, Routes } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { YearFilter } from "./components/ui";
 import { useMeta } from "./hooks/useApi";
-import { Overview } from "./pages/Overview";
-import { Programs } from "./pages/Programs";
-import { Institutions } from "./pages/Institutions";
-import { Networks } from "./pages/Networks";
-import { Members } from "./pages/Members";
-import { MemberProfile } from "./pages/MemberProfile";
-import { Ask } from "./pages/Ask";
 import type { YearRange } from "./api/types";
+
+// Lazy-load each route so the heavy libs (recharts, force-graph, UpSet.js) ship
+// in per-route chunks loaded on demand, keeping the initial bundle light.
+const Overview = lazy(() => import("./pages/Overview").then((m) => ({ default: m.Overview })));
+const Programs = lazy(() => import("./pages/Programs").then((m) => ({ default: m.Programs })));
+const Institutions = lazy(() =>
+  import("./pages/Institutions").then((m) => ({ default: m.Institutions })),
+);
+const Networks = lazy(() => import("./pages/Networks").then((m) => ({ default: m.Networks })));
+const Members = lazy(() => import("./pages/Members").then((m) => ({ default: m.Members })));
+const MemberProfile = lazy(() =>
+  import("./pages/MemberProfile").then((m) => ({ default: m.MemberProfile })),
+);
+const Ask = lazy(() => import("./pages/Ask").then((m) => ({ default: m.Ask })));
 
 export function App() {
   const meta = useMeta();
