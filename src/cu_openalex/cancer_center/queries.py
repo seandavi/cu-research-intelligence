@@ -17,11 +17,14 @@ import duckdb
 import polars as pl
 
 from .paths import cc_target
+from .programs import current_programs_sql
 
 # Headline analysis window. Recent years (>= CUTOFF_RECENT) carry an OpenAlex
 # indexing-lag caveat; trend charts annotate this.
-DEFAULT_MIN_YEAR = 2015
+# Default reporting window: the most recent 7 complete years. Older years
+# intermix deprecated program structures, so reporting defaults to this window.
 DEFAULT_MAX_YEAR = 2024
+DEFAULT_MIN_YEAR = DEFAULT_MAX_YEAR - 6  # 2018–2024 inclusive (7 years)
 # Years >= this are still filling in (OpenAlex indexing lag); flagged as provisional.
 INDEXING_LAG_FROM = 2025
 
@@ -83,6 +86,8 @@ def kpi_summary(min_year: int | None = None, max_year: int | None = None) -> dic
             sum(cited_by_count)::BIGINT AS citations,
             round(avg(fwci), 2) AS mean_fwci,
             round(median(fwci), 2) AS median_fwci,
+            round(median(rcr), 2) AS median_rcr,
+            count(rcr) AS n_with_rcr,
             round(100.0 * avg(is_oa::int), 1) AS pct_open_access,
             round(100.0 * avg((collaboration_class != 'solo')::int), 1) AS pct_collaborative,
             count(*) FILTER (WHERE collaboration_class != 'solo') AS n_collaborative,
@@ -158,17 +163,23 @@ def collaboration_trend(min_year: int | None = None, max_year: int | None = None
 # --- Programs ----------------------------------------------------------------
 
 
-def program_summary(min_year: int | None = None, max_year: int | None = None) -> pl.DataFrame:
-    """Per-program publication / citation / collaboration rollup.
+def program_summary(
+    min_year: int | None = None,
+    max_year: int | None = None,
+    current_only: bool = True,
+) -> pl.DataFrame:
+    """Per-program publication / citation / collaboration / impact rollup.
 
     A work counts toward a program if any of its cc-authors belong to it (works
     spanning programs count once per program — the CCSG convention).
+    ``current_only`` restricts to the center's active programs (default).
     """
     yc = _year_clause(min_year, max_year)
+    prog_filter = f"AND program IN {current_programs_sql()}" if current_only else ""
     return run_sql(
         f"""
         WITH exploded AS (
-            SELECT w.work_id, w.publication_year, w.cited_by_count, w.fwci,
+            SELECT w.work_id, w.publication_year, w.cited_by_count, w.fwci, w.rcr,
                    w.is_inter_program, w.is_intra_program,
                    UNNEST(w.programs) AS program
             FROM works w WHERE {yc}
@@ -177,16 +188,19 @@ def program_summary(min_year: int | None = None, max_year: int | None = None) ->
                count(DISTINCT work_id) AS publications,
                sum(cited_by_count)::BIGINT AS citations,
                round(avg(fwci), 2) AS mean_fwci,
+               round(median(rcr), 2) AS median_rcr,
                round(100.0 * avg(is_inter_program::int), 1) AS pct_inter_program,
                round(100.0 * avg(is_intra_program::int), 1) AS pct_intra_program
-        FROM exploded WHERE program IS NOT NULL
+        FROM exploded WHERE program IS NOT NULL {prog_filter}
         GROUP BY 1 ORDER BY publications DESC
         """
     )
 
 
 def program_collaboration_matrix(
-    min_year: int | None = None, max_year: int | None = None
+    min_year: int | None = None,
+    max_year: int | None = None,
+    current_only: bool = True,
 ) -> pl.DataFrame:
     """Program x program co-authorship counts (symmetric).
 
@@ -196,9 +210,10 @@ def program_collaboration_matrix(
       ≥2 members *of that same program* (not the program's total output).
 
     Built from the member×work×program grain so per-program member counts are
-    exact; restricted to real programs.
+    exact. ``current_only`` restricts to the center's active programs (default).
     """
     yc = _year_clause(min_year, max_year, col="publication_year")
+    prog_filter = f"AND program IN {current_programs_sql()}" if current_only else ""
     return run_sql(
         f"""
         WITH wp AS (  -- per (work, real program): how many members of that program
@@ -206,6 +221,7 @@ def program_collaboration_matrix(
             FROM member_works
             WHERE {yc} AND program IS NOT NULL
               AND program NOT IN ('', 'Unknown/ Unaffiliated/ Emeritus')
+              {prog_filter}
             GROUP BY 1, 2
         ),
         diagonal AS (  -- intra-programmatic: a program with >=2 members on the work

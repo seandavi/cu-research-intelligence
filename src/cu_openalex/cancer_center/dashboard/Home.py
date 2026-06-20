@@ -65,10 +65,11 @@ def main() -> None:
         help="Publications with ≥2 members of one program",
     )
     h[3].metric(
-        "Median FWCI",
-        f"{k['median_fwci']:.2f}" if k["median_fwci"] else "—",
-        help="Typical paper's field-weighted citation impact (1.0 = world average). "
-        "Median, not mean, because impact is right-skewed.",
+        "Median RCR",
+        f"{k['median_rcr']:.2f}" if k.get("median_rcr") else "—",
+        help="NIH iCite Relative Citation Ratio of the typical paper "
+        f"(1.0 = median NIH-funded paper in its field). {shared.fmt_int(k.get('n_with_rcr'))} "
+        "publications scored.",
     )
 
     st.subheader(f"Window totals — {min_year}–{max_year}")
@@ -80,10 +81,10 @@ def main() -> None:
                 "Peer-reviewed articles & reviews over the window",
             ),
             (
-                "Mean FWCI",
-                f"{k['mean_fwci']:.2f}" if k["mean_fwci"] else "—",
-                "Mean field-weighted impact — inflated by a few highly-cited papers; "
-                "see median above",
+                "Median FWCI",
+                f"{k['median_fwci']:.2f}" if k["median_fwci"] else "—",
+                "Field-weighted citation impact of the typical paper "
+                "(1.0 = world average). Median; mean is skewed by a few outliers.",
             ),
             ("Open access", f"{k['pct_open_access']:.0f}%", "Share of publications that are OA"),
             (

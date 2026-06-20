@@ -28,6 +28,7 @@ from .programs import MAX_VALID_YEAR, MIN_VALID_YEAR, publication_types_sql
 from .resolve import build_crosswalk
 
 _WORKS_GLOB = "data/openalex/works/**/*.parquet"
+_RAW_WORKS_GLOB = "data/openalex/raw/works/**/*.parquet"
 _AUTHORS_GLOB = "data/openalex/authors/current/authors.parquet"
 
 # OpenAlex author disambiguation occasionally conflates many distinct people
@@ -61,6 +62,31 @@ def _author_program_map(crosswalk: pl.DataFrame) -> pl.DataFrame:
             "is_active",
         )
     )
+
+
+def _register_enrichment(con) -> None:
+    """Register DOI→PMID and PMID→RCR crosswalks as ``doi_pmid`` / ``rcr_cw``.
+
+    Both come from :mod:`enrich` (NCBI ID Converter + iCite). When a crosswalk
+    hasn't been fetched yet, an empty table is registered so the build still
+    runs (no backfill / no RCR) — enrichment is an optional, additive layer.
+    """
+    from .enrich import doi_pmid_crosswalk, rcr_crosswalk
+
+    dp = doi_pmid_crosswalk()
+    con.execute("CREATE TABLE doi_pmid (doi VARCHAR, pmid VARCHAR)")
+    if dp is not None and dp.height:
+        con.register("_dp", dp.to_arrow())
+        con.execute("INSERT INTO doi_pmid SELECT doi, pmid FROM _dp")
+
+    rc = rcr_crosswalk()
+    con.execute(
+        "CREATE TABLE rcr_cw "
+        "(pmid VARCHAR, rcr DOUBLE, nih_percentile DOUBLE, citation_count BIGINT)"
+    )
+    if rc is not None and rc.height:
+        con.register("_rc", rc.to_arrow())
+        con.execute("INSERT INTO rcr_cw SELECT pmid, rcr, nih_percentile, citation_count FROM _rc")
 
 
 def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]:
@@ -116,6 +142,42 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
         pub_types = publication_types_sql()
         min_year, max_year = MIN_VALID_YEAR, MAX_VALID_YEAR
 
+        _register_enrichment(con)
+
+        # Per-work metadata shared by both output tables: backfilled PMID,
+        # meeting-abstract flag, the publication flag, and iCite RCR. Restricted
+        # to cc works so the raw-JSON issue extraction stays cheap.
+        con.execute("CREATE TABLE cc_workids AS SELECT DISTINCT work_id FROM work_author")
+        con.execute(
+            f"""
+            CREATE TABLE issue_lookup AS
+            SELECT work_id,
+                   any_value(json_extract_string(r.raw_json, '$.biblio.issue')) AS issue
+            FROM '{_RAW_WORKS_GLOB}' r JOIN cc_workids c USING (work_id)
+            GROUP BY work_id
+            """
+        )
+        con.execute(
+            f"""
+            CREATE TABLE work_meta AS
+            SELECT w.work_id,
+                   COALESCE(NULLIF(w.pmid, ''), dp.pmid) AS pmid_final,
+                   il.issue,
+                   -- Meeting abstracts: AACR ("Abstract …") + conference
+                   -- supplements (issue like "14_suppl"). Excluded from pubs.
+                   (w.title ILIKE 'Abstract %' OR lower(il.issue) LIKE '%suppl%')
+                       AS is_meeting_abstract,
+                   rc.rcr, rc.nih_percentile
+            FROM '{_WORKS_GLOB}' w
+            JOIN cc_workids c USING (work_id)
+            LEFT JOIN issue_lookup il USING (work_id)
+            LEFT JOIN doi_pmid dp
+                ON dp.doi = regexp_replace(lower(w.doi), '^https?://(dx\\.)?doi\\.org/', '')
+            LEFT JOIN rcr_cw rc
+                ON rc.pmid = COALESCE(NULLIF(w.pmid, ''), dp.pmid)
+            """
+        )
+
         # member x work bridge (carry minimal work metadata for rollups).
         member_works_path = cc_target("member_works")
         con.execute(
@@ -123,11 +185,13 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
             COPY (
                 SELECT wa.member_id, wa.author_id, wa.program, wa.confidence,
                        w.work_id, w.publication_year, w.cited_by_count, w.fwci,
-                       w.is_oa, w.type, (w.type IN {pub_types}) AS is_publication,
+                       m.rcr, w.is_oa, w.type,
+                       (w.type IN {pub_types} AND NOT m.is_meeting_abstract) AS is_publication,
                        w.primary_topic, w.topic_field,
                        w.topic_subfield, w.source_name
                 FROM work_author wa
                 JOIN '{_WORKS_GLOB}' w USING (work_id)
+                JOIN work_meta m USING (work_id)
                 WHERE w.publication_year BETWEEN {min_year} AND {max_year}
             ) TO '{member_works_path}' (FORMAT PARQUET)
             """
@@ -164,7 +228,8 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                     FROM prog_counts GROUP BY work_id
                 )
                 SELECT w.work_id, w.title, w.publication_year, w.publication_date,
-                       w.doi, w.pmid, w.pmcid, w.type, w.cited_by_count, w.fwci,
+                       w.doi, m.pmid_final AS pmid, w.pmcid, w.type,
+                       w.cited_by_count, w.fwci, m.rcr, m.nih_percentile,
                        w.is_oa, w.oa_status, w.is_retracted,
                        w.primary_topic, w.topic_subfield, w.topic_field, w.topic_domain,
                        w.source_name, w.source_id, w.funder_ids,
@@ -173,9 +238,10 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                        a.cc_member_ids, a.cc_author_ids, a.programs,
                        a.any_active_member,
                        COALESCE(i.max_in_one_program, 0) AS max_in_one_program,
-                       -- Peer-reviewed publication? Excludes preprints,
-                       -- supplementary-materials, datasets, paratext (ADR-0013).
-                       (w.type IN {pub_types}) AS is_publication,
+                       m.is_meeting_abstract,
+                       -- Peer-reviewed publication? Excludes preprints, supplementary-
+                       -- materials, datasets, paratext, AND meeting abstracts (ADR-0013).
+                       (w.type IN {pub_types} AND NOT m.is_meeting_abstract) AS is_publication,
                        -- Independent, possibly-overlapping flags (SKCCC convention):
                        (a.n_programs >= 2) AS is_inter_program,
                        (COALESCE(i.max_in_one_program, 0) >= 2) AS is_intra_program,
@@ -187,6 +253,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                        END AS collaboration_class
                 FROM agg a
                 JOIN '{_WORKS_GLOB}' w USING (work_id)
+                JOIN work_meta m USING (work_id)
                 LEFT JOIN intra i USING (work_id)
                 WHERE w.publication_year BETWEEN {min_year} AND {max_year}
             ) TO '{works_path}' (FORMAT PARQUET)

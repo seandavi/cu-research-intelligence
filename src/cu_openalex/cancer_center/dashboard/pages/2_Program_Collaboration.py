@@ -17,18 +17,17 @@ def main() -> None:
         "of its *cancer-center member* co-authors only. A paper can be both."
     )
     min_year, max_year = shared.year_filter()
-    min_pubs = st.sidebar.slider(
-        "Hide programs below N publications",
-        0,
-        500,
-        100,
-        step=25,
-        help="Suppresses small/legacy programs from the comparative views.",
+    include_deprecated = st.sidebar.checkbox(
+        "Include deprecated programs",
+        value=False,
+        help="By default only the center's four current programs are shown "
+        "(Cancer Prevention & Control, Developmental Therapeutics, "
+        "Molecular & Cellular Oncology, Tumor-Host Interactions).",
     )
+    current_only = not include_deprecated
 
-    summary = shared.program_summary(min_year, max_year)
-    summary = summary.filter(summary["publications"] >= min_pubs)
-    matrix = shared.program_collaboration_matrix(min_year, max_year)
+    summary = shared.program_summary(min_year, max_year, current_only)
+    matrix = shared.program_collaboration_matrix(min_year, max_year, current_only)
     programs = summary["program"].to_list()
     matrix = matrix.filter(matrix["prog_a"].is_in(programs) & matrix["prog_b"].is_in(programs))
 
@@ -74,6 +73,7 @@ def main() -> None:
             "publications": st.column_config.NumberColumn("Publications", format="%d"),
             "citations": st.column_config.NumberColumn("Citations", format="%d"),
             "mean_fwci": st.column_config.NumberColumn("Mean FWCI", format="%.2f"),
+            "median_rcr": st.column_config.NumberColumn("Median RCR", format="%.2f"),
             "pct_inter_program": st.column_config.NumberColumn("Inter %", format="%.1f"),
             "pct_intra_program": st.column_config.NumberColumn("Intra %", format="%.1f"),
         },

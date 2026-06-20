@@ -49,13 +49,13 @@ def collaboration_trend(min_year: int, max_year: int):
 
 
 @st.cache_data(show_spinner=False)
-def program_summary(min_year: int, max_year: int):
-    return q.program_summary(min_year, max_year)
+def program_summary(min_year: int, max_year: int, current_only: bool = True):
+    return q.program_summary(min_year, max_year, current_only=current_only)
 
 
 @st.cache_data(show_spinner=False)
-def program_collaboration_matrix(min_year: int, max_year: int):
-    return q.program_collaboration_matrix(min_year, max_year)
+def program_collaboration_matrix(min_year: int, max_year: int, current_only: bool = True):
+    return q.program_collaboration_matrix(min_year, max_year, current_only=current_only)
 
 
 @st.cache_data(show_spinner=False)
@@ -81,14 +81,15 @@ def program_options() -> list[str]:
 # --- Sidebar controls --------------------------------------------------------
 
 
-def year_filter(default_min: int = 2015, default_max: int = 2024) -> tuple[int, int]:
-    """Year-range slider in the sidebar; returns (min_year, max_year)."""
+def year_filter(default_min: int | None = None, default_max: int | None = None) -> tuple[int, int]:
+    """Year-range slider in the sidebar; defaults to the 7-year reporting window."""
     return st.sidebar.slider(
         "Publication years",
         min_value=2000,
         max_value=2025,
-        value=(default_min, default_max),
+        value=(default_min or q.DEFAULT_MIN_YEAR, default_max or q.DEFAULT_MAX_YEAR),
         step=1,
+        help="Default is the most recent 7 complete years (current program era).",
     )
 
 
@@ -101,12 +102,14 @@ def program_filter(label: str = "Program") -> str | None:
 def coverage_caveat(max_year: int) -> None:
     """Render the standing data-provenance caveat (shown once per page)."""
     msgs = [
-        "**About this data.** Counts are peer-reviewed articles & reviews "
-        "(preprints, supplementary files, and datasets excluded). Members are "
-        "matched to OpenAlex authors by ORCID and name; ~675 of 1,115 resolve, so "
-        "collaboration figures are **lower bounds**. Only ORCID matches are "
-        "identity-verified (*high* confidence); name matches are *medium*. "
-        "Within-year *ratios* are more reliable than absolute counts.",
+        "**About this data.** Counts are peer-reviewed articles & reviews — "
+        "preprints, datasets, and **conference abstracts** excluded. Impact uses "
+        "field-weighted citation impact (FWCI) and NIH iCite **RCR** "
+        "(1.0 = median NIH-funded paper). Members are matched to OpenAlex authors "
+        "by ORCID and name; ~675 of 1,115 resolve, so collaboration figures are "
+        "**lower bounds**. Only ORCID matches are identity-verified (*high* "
+        "confidence); name matches are *medium*. Within-year *ratios* are more "
+        "reliable than absolute counts.",
     ]
     if max_year >= q.INDEXING_LAG_FROM:
         msgs.append(

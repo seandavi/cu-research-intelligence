@@ -28,6 +28,23 @@ NON_PROGRAMS: frozenset[str] = frozenset(
     {"", "Unknown/ Unaffiliated/ Emeritus", "Unknown/Unaffiliated/Emeritus"}
 )
 
+# The center's *current* research programs. The remaining roster labels (Cancer
+# Cell Biology, Lung/Head & Neck, Hormone-Related, Immunology, Carcinogenesis,
+# Hematologic Malignancies, Cancer Genetics, …) are deprecated; program-level
+# comparisons default to these four to avoid intermixing retired structures.
+CURRENT_PROGRAMS: tuple[str, ...] = (
+    "Cancer Prevention & Control",
+    "Developmental Therapeutics",
+    "Molecular & Cellular Oncology",
+    "Tumor-Host Interactions",
+)
+
+
+def current_programs_sql() -> str:
+    """SQL list literal of current programs for an ``IN (...)`` filter."""
+    return "(" + ", ".join("'" + p.replace("'", "''") + "'" for p in CURRENT_PROGRAMS) + ")"
+
+
 # OpenAlex work ``type`` values that count as a peer-reviewed publication for
 # CCSG reporting. Excludes preprint, supplementary-materials, dataset, paratext,
 # peer-review, etc. A 2023 OpenAlex bulk-index event injected thousands of

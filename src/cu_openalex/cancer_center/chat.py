@@ -48,7 +48,11 @@ TABLE works  -- one row per work with >=1 member author
   is_publication (bool: TRUE for peer-reviewed article/review; FALSE for
     preprints/supplementary/datasets -- ADD `WHERE is_publication` for any
     publication count, this is the default everywhere else),
-  fwci (field-weighted citation impact; 1.0 = world avg), is_oa (open access),
+  is_meeting_abstract (bool: conference abstract, excluded from is_publication),
+  fwci (field-weighted citation impact; 1.0 = world avg),
+  rcr (NIH iCite Relative Citation Ratio; 1.0 = median NIH-funded paper in field;
+    the most NCI-native impact metric; NULL for ~20% without a PMID/too recent),
+  nih_percentile, is_oa (open access),
   primary_topic, topic_subfield, topic_field, topic_domain, source_name (journal),
   n_total_authors, n_cc_members (cancer-center authors on the work),
   n_programs (distinct programs represented), programs (LIST of program names),
