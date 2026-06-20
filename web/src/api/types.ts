@@ -7,6 +7,53 @@ export interface Meta {
   default_max_year: number;
   indexing_lag_from: number;
   current_programs: string[];
+  all_programs: string[];
+}
+
+export interface PublicationRow {
+  work_id: string;
+  title: string | null;
+  publication_year: number;
+  doi: string | null;
+  pmid: string | null;
+  type: string | null;
+  source_name: string | null;
+  cited_by_count: number | null;
+  fwci: number | null;
+  rcr: number | null;
+  is_oa: boolean;
+  oa_status: string | null;
+  primary_topic: string | null;
+  topic_field: string | null;
+  programs: string[];
+  collaboration_class: string;
+  has_external_collab: boolean;
+  is_international: boolean;
+}
+
+export interface PublicationFilters {
+  q?: string;
+  minYear?: number;
+  maxYear?: number;
+  programs?: string[];
+  collaboration_class?: string;
+  is_oa?: boolean;
+  inter_institutional?: boolean;
+  journal?: string;
+  author?: string;
+  min_citations?: number;
+  min_rcr?: number;
+  sort?: string;
+  descending?: boolean;
+  page?: number;
+  page_size?: number;
+}
+
+export interface PublicationResults {
+  total: number;
+  page: number;
+  page_size: number;
+  rows: PublicationRow[];
 }
 
 export interface Kpi {

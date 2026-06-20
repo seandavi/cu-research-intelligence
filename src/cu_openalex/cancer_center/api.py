@@ -63,13 +63,54 @@ def health() -> dict:
 
 @app.get("/api/meta")
 def meta() -> dict:
-    """Reporting window defaults and the current-program list (for UI controls)."""
+    """Reporting window defaults and program lists (for UI controls)."""
     return {
         "default_min_year": q.DEFAULT_MIN_YEAR,
         "default_max_year": q.DEFAULT_MAX_YEAR,
         "indexing_lag_from": q.INDEXING_LAG_FROM,
         "current_programs": list(CURRENT_PROGRAMS),
+        "all_programs": q.all_programs(),
     }
+
+
+@app.get("/api/publications")
+def publications(
+    q_text: str | None = Query(None, alias="q"),
+    min_year: int | None = None,
+    max_year: int | None = None,
+    programs: list[str] | None = Query(None),
+    collaboration_class: str | None = None,
+    is_oa: bool | None = None,
+    inter_institutional: bool | None = None,
+    topic_field: str | None = None,
+    journal: str | None = None,
+    author: str | None = None,
+    min_citations: int | None = Query(None, ge=0),
+    min_rcr: float | None = Query(None, ge=0),
+    sort: str = Query("citations", pattern="^(citations|rcr|fwci|year|title)$"),
+    descending: bool = True,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+) -> dict:
+    """Filtered, sorted, paginated publication search."""
+    return q.search_publications(
+        q=q_text,
+        min_year=min_year,
+        max_year=max_year,
+        programs=programs,
+        collaboration_class=collaboration_class,
+        is_oa=is_oa,
+        inter_institutional=inter_institutional,
+        topic_field=topic_field,
+        journal=journal,
+        author=author,
+        min_citations=min_citations,
+        min_rcr=min_rcr,
+        sort=sort,
+        descending=descending,
+        page=page,
+        page_size=page_size,
+    )
 
 
 # --- Analytics (mirror the dashboard's query layer) --------------------------

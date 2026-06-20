@@ -12,6 +12,8 @@ import type {
   MemberRow,
   Meta,
   NetworkData,
+  PublicationFilters,
+  PublicationResults,
   ProgramCombination,
   ProgramSummaryRow,
   PublicationYearRow,
@@ -52,6 +54,30 @@ export const api = {
     get<TopicRow[]>("/top-topics", { ...yr(r), program, field_level: fieldLevel, limit }),
   members: (r?: YearRange) => get<MemberRow[]>("/members", yr(r)),
   member: (id: number, r?: YearRange) => get<MemberProfile>(`/member/${id}`, yr(r)),
+  publications: async (f: PublicationFilters): Promise<PublicationResults> => {
+    const qs = new URLSearchParams();
+    const set = (k: string, v: unknown) => {
+      if (v !== undefined && v !== null && v !== "") qs.set(k, String(v));
+    };
+    set("q", f.q);
+    set("min_year", f.minYear);
+    set("max_year", f.maxYear);
+    set("collaboration_class", f.collaboration_class);
+    set("is_oa", f.is_oa);
+    set("inter_institutional", f.inter_institutional);
+    set("journal", f.journal);
+    set("author", f.author);
+    set("min_citations", f.min_citations);
+    set("min_rcr", f.min_rcr);
+    set("sort", f.sort);
+    set("descending", f.descending);
+    set("page", f.page);
+    set("page_size", f.page_size);
+    for (const p of f.programs ?? []) qs.append("programs", p);
+    const res = await fetch(`${BASE}/publications?${qs}`);
+    if (!res.ok) throw new Error(`publications search failed: ${res.status}`);
+    return res.json() as Promise<PublicationResults>;
+  },
   topCollaborators: (r?: YearRange, limit = 20) =>
     get<CollaboratorRow[]>("/top-collaborators", { ...yr(r), limit }),
   interInstTrend: (r?: YearRange) =>

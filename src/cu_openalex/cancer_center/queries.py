@@ -66,6 +66,12 @@ def run_sql(sql: str) -> pl.DataFrame:
         return connect().sql(sql).pl()
 
 
+def run_params(sql: str, params: list) -> pl.DataFrame:
+    """Execute a parameterized read-only query (``?`` placeholders); locked."""
+    with _LOCK:
+        return connect().execute(sql, params).pl()
+
+
 def _year_clause(
     min_year: int | None,
     max_year: int | None,
@@ -367,6 +373,112 @@ def member_directory(min_year: int | None = None, max_year: int | None = None) -
         GROUP BY ALL ORDER BY publications DESC
         """
     )
+
+
+# --- Publication search ------------------------------------------------------
+
+# Allow-listed sort columns (never interpolate user input as a column name).
+_SORT_COLUMNS = {
+    "citations": "cited_by_count",
+    "rcr": "rcr",
+    "fwci": "fwci",
+    "year": "publication_year",
+    "title": "title",
+}
+_COLLAB_CLASSES = {"solo", "intra_program", "inter_program"}
+
+
+def all_programs() -> list[str]:
+    """All real (current + deprecated) program names, for filter controls."""
+    rows = run_sql(
+        "SELECT DISTINCT PrimaryProgram p FROM members "
+        "WHERE PrimaryProgram NOT IN ('', 'Unknown/ Unaffiliated/ Emeritus') ORDER BY 1"
+    )
+    return rows["p"].to_list()
+
+
+def search_publications(
+    q: str | None = None,
+    min_year: int | None = None,
+    max_year: int | None = None,
+    programs: list[str] | None = None,
+    collaboration_class: str | None = None,
+    is_oa: bool | None = None,
+    inter_institutional: bool | None = None,
+    topic_field: str | None = None,
+    journal: str | None = None,
+    author: str | None = None,
+    min_citations: int | None = None,
+    min_rcr: float | None = None,
+    sort: str = "citations",
+    descending: bool = True,
+    page: int = 1,
+    page_size: int = 50,
+) -> dict:
+    """Filtered, sorted, paginated publication search.
+
+    All values are bound as query parameters (injection-safe); ``sort`` and
+    ``collaboration_class`` are validated against allow-lists. ``programs`` keeps
+    publications touching *any* of the named programs. Returns
+    ``{total, page, page_size, rows}``.
+    """
+    conds = ["is_publication"]
+    params: list = []
+
+    def add(cond: str, value) -> None:
+        conds.append(cond)
+        params.append(value)
+
+    if q:
+        add("title ILIKE ?", f"%{q}%")
+    if min_year is not None:
+        add("publication_year >= ?", min_year)
+    if max_year is not None:
+        add("publication_year <= ?", max_year)
+    if programs:
+        add("list_has_any(programs, ?)", list(programs))
+    if collaboration_class in _COLLAB_CLASSES:
+        add("collaboration_class = ?", collaboration_class)
+    if is_oa is not None:
+        add("is_oa = ?", is_oa)
+    if inter_institutional is not None:
+        add("has_external_collab = ?", inter_institutional)
+    if topic_field:
+        add("topic_field = ?", topic_field)
+    if journal:
+        add("source_name ILIKE ?", f"%{journal}%")
+    if author:
+        add(
+            "work_id IN (SELECT w.work_id FROM works w, UNNEST(w.cc_member_ids) t(mid) "
+            "JOIN members m ON m.Member_ID = t.mid "
+            "WHERE lower(m.First_Name || ' ' || m.Last_Name) LIKE ?)",
+            f"%{author.lower()}%",
+        )
+    if min_citations is not None:
+        add("cited_by_count >= ?", min_citations)
+    if min_rcr is not None:
+        add("rcr >= ?", min_rcr)
+
+    where = " AND ".join(conds)
+    sort_col = _SORT_COLUMNS.get(sort, "cited_by_count")
+    direction = "DESC" if descending else "ASC"
+    page = max(1, page)
+    page_size = max(1, min(page_size, 200))
+    offset = (page - 1) * page_size
+
+    total = int(run_params(f"SELECT count(*) AS n FROM works WHERE {where}", params)["n"][0])
+    rows = run_params(
+        f"""
+        SELECT work_id, title, publication_year, doi, pmid, type, source_name,
+               cited_by_count, fwci, rcr, is_oa, oa_status, primary_topic, topic_field,
+               programs, collaboration_class, has_external_collab, is_international
+        FROM works WHERE {where}
+        ORDER BY {sort_col} {direction} NULLS LAST, publication_year DESC
+        LIMIT ? OFFSET ?
+        """,
+        [*params, page_size, offset],
+    )
+    return {"total": total, "page": page, "page_size": page_size, "rows": rows.to_dicts()}
 
 
 def member_profile(

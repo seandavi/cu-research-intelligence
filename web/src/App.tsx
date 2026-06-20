@@ -8,6 +8,9 @@ import type { YearRange } from "./api/types";
 // Lazy-load each route so the heavy libs (recharts, force-graph, UpSet.js) ship
 // in per-route chunks loaded on demand, keeping the initial bundle light.
 const Overview = lazy(() => import("./pages/Overview").then((m) => ({ default: m.Overview })));
+const Publications = lazy(() =>
+  import("./pages/Publications").then((m) => ({ default: m.Publications })),
+);
 const Programs = lazy(() => import("./pages/Programs").then((m) => ({ default: m.Programs })));
 const Institutions = lazy(() =>
   import("./pages/Institutions").then((m) => ({ default: m.Institutions })),
@@ -34,6 +37,7 @@ export function App() {
     <Routes>
       <Route element={<Layout />}>
         <Route index element={<WithFilter range={range} setRange={setRange}>{(r) => <Overview range={r} />}</WithFilter>} />
+        <Route path="publications" element={<WithFilter range={range} setRange={setRange}>{(r) => <Publications range={r} />}</WithFilter>} />
         <Route path="programs" element={<WithFilter range={range} setRange={setRange}>{(r) => <Programs range={r} />}</WithFilter>} />
         <Route path="institutions" element={<WithFilter range={range} setRange={setRange}>{(r) => <Institutions range={r} />}</WithFilter>} />
         <Route path="networks" element={<WithFilter range={range} setRange={setRange}>{(r) => <Networks range={r} />}</WithFilter>} />

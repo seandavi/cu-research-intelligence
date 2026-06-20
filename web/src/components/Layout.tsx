@@ -3,6 +3,7 @@ import { NavLink, Outlet } from "react-router-dom";
 
 const NAV = [
   { to: "/", label: "Overview", end: true },
+  { to: "/publications", label: "Publications" },
   { to: "/programs", label: "Program Collaboration" },
   { to: "/institutions", label: "Inter-institutional" },
   { to: "/networks", label: "Networks" },

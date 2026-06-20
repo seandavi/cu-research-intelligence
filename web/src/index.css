@@ -116,5 +116,19 @@ table.data.compact th, table.data.compact td { padding: 0.3rem 0.5rem; font-size
 table.data a { color: var(--accent); text-decoration: none; }
 table.data a:hover { text-decoration: underline; }
 
+/* Publications search */
+.filters select { padding: 0.4rem 0.5rem; border: 1px solid var(--line); border-radius: 7px; background: #fff; }
+.chk { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.9rem; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; margin-top: 0.7rem; }
+.chips-label { color: var(--muted); font-size: 0.85rem; margin-right: 0.2rem; }
+.chip { background: #fff; color: var(--ink); border: 1px solid var(--line); padding: 0.2rem 0.55rem; border-radius: 999px; font-size: 0.8rem; cursor: pointer; }
+.chip.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+.results-head { display: flex; justify-content: space-between; align-items: center; margin: 0.8rem 0 0.2rem; }
+.pager { display: flex; gap: 1rem; align-items: center; justify-content: center; margin: 1rem 0; }
+.pager .muted { min-width: 120px; text-align: center; }
+.badge.oa { margin-left: 0.4rem; font-size: 0.65rem; vertical-align: middle; }
+.tag { margin-left: 0.35rem; color: var(--accent); }
+.pchip { display: inline-block; background: #eef2f7; color: #44546a; border-radius: 4px; padding: 0 0.3rem; margin-right: 0.2rem; font-size: 0.7rem; font-weight: 600; }
+
 .loading { color: var(--muted); padding: 2rem 0; }
 .error { color: #c53030; background: #fdeaea; padding: 0.6rem 0.8rem; border-radius: 8px; }

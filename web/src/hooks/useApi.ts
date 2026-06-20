@@ -1,6 +1,6 @@
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { YearRange } from "../api/types";
+import type { PublicationFilters, YearRange } from "../api/types";
 
 const key = (name: string, r?: YearRange, extra?: unknown) => [name, r?.minYear, r?.maxYear, extra];
 
@@ -45,6 +45,13 @@ export const useTopTopics = (r?: YearRange, program?: string, fieldLevel = "topi
 
 export const useMembers = (r?: YearRange) =>
   useQuery({ queryKey: key("members", r), queryFn: () => api.members(r), enabled: !!r });
+
+export const usePublications = (filters: PublicationFilters) =>
+  useQuery({
+    queryKey: ["publications", filters],
+    queryFn: () => api.publications(filters),
+    placeholderData: keepPreviousData, // keep the table visible while paging/filtering
+  });
 
 export const useTopCollaborators = (r?: YearRange, limit = 20) =>
   useQuery({

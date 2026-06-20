@@ -58,6 +58,9 @@ target-version = "py313"
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM"]
+# FastAPI's Query/Path/Depends in argument defaults are the idiomatic pattern,
+# not the B008 mutable-default-call anti-pattern.
+flake8-bugbear.extend-immutable-calls = ["fastapi.Query", "fastapi.Path", "fastapi.Depends"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
