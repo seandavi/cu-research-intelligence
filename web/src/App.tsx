@@ -1,8 +1,9 @@
 import { lazy, useEffect, useState } from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { YearFilter } from "./components/ui";
 import { useMeta } from "./hooks/useApi";
+import { trackPageView } from "./lib/analytics";
 import type { YearRange } from "./api/types";
 
 // Lazy-load each route so the heavy libs (recharts, force-graph, UpSet.js) ship
@@ -24,7 +25,13 @@ const Ask = lazy(() => import("./pages/Ask").then((m) => ({ default: m.Ask })));
 
 export function App() {
   const meta = useMeta();
+  const location = useLocation();
   const [range, setRange] = useState<YearRange | null>(null);
+
+  // SPA page-view tracking on every route change.
+  useEffect(() => {
+    trackPageView(location.pathname + location.search);
+  }, [location.pathname, location.search]);
 
   // Initialize the year range from the API's default 7-year window once.
   useEffect(() => {
