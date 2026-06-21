@@ -27,9 +27,9 @@ export function Funding({ range }: { range: YearRange }) {
     <>
       <h1>NIH Funding</h1>
       <p className="lede">
-        NIH RePORTER grants for the University of Colorado Denver, matched by PI name to
-        cancer-center members. Fiscal years per the range (top-right). A grant is counted once
-        (distinct project); award is summed across funded years.
+        NIH RePORTER grants where a cancer-center member is a named PI (any institution), matched
+        by name. Fiscal years per the range (top-right). A grant is counted once (distinct
+        project); award is summed across funded years.
       </p>
 
       <div className="kpi-row">
@@ -104,10 +104,10 @@ export function Funding({ range }: { range: YearRange }) {
       </Card>
 
       <p className="caveat">
-        <strong>About this data.</strong> Grants come from NIH RePORTER for grantee organization
-        "University of Colorado Denver" and are matched to roster members by PI name (RePORTER has
-        no ORCID), so attribution is a name match — a member is credited if any named PI matches.
-        Non-NIH funding is not included.
+        <strong>About this data.</strong> Grants come from NIH RePORTER, matched to roster members
+        by <strong>exact PI name</strong> across all grantee institutions (RePORTER has no ORCID),
+        so a member is credited when a named PI matches their name — including multi-PI awards
+        administered elsewhere. Common names can still mis-credit. Non-NIH funding is not included.
       </p>
       <Caveat />
     </>

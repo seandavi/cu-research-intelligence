@@ -123,8 +123,8 @@ export function MemberProfile({ range }: { range: YearRange }) {
       {grants.length > 0 && (
         <Card title={`NIH grants — ${grants.length} (${fmtMoney(grantTotal)} total)`}>
           <p className="hint">
-            NIH RePORTER grants where this member is a named PI (University of Colorado Denver),
-            matched by name. Award = sum across funded years.
+            NIH RePORTER grants where this member is a named PI (any institution), matched by
+            name. Award = sum across funded years.
           </p>
           <table className="data">
             <thead>
