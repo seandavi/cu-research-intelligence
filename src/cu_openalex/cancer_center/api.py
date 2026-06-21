@@ -221,6 +221,7 @@ class ChatResponse(BaseModel):
     answer: str
     queries: list[str]
     table: list[dict] | None = None
+    suggestions: list[str] = []
     error: str | None = None
 
 
@@ -230,5 +231,9 @@ def ask(req: ChatRequest) -> ChatResponse:
     result = chat.ask(req.question, history=req.history, model=req.model)
     table = result.tables[-1].to_dicts() if result.tables else None
     return ChatResponse(
-        answer=result.answer, queries=result.queries, table=table, error=result.error
+        answer=result.answer,
+        queries=result.queries,
+        table=table,
+        suggestions=result.suggestions,
+        error=result.error,
     )

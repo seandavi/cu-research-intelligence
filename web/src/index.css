@@ -96,6 +96,9 @@ table.data.compact th, table.data.compact td { padding: 0.3rem 0.5rem; font-size
 .msg details { margin-top: 0.5rem; }
 .msg summary { cursor: pointer; color: var(--accent); font-size: 0.85rem; }
 .msg pre { background: #f3f4f6; padding: 0.6rem; border-radius: 7px; overflow-x: auto; font-size: 0.8rem; }
+.followups { display: flex; flex-wrap: wrap; gap: 0.4rem; align-items: center; margin-top: 0.7rem; padding-top: 0.6rem; border-top: 1px solid var(--line); }
+.followups-label { color: var(--muted); font-size: 0.8rem; margin-right: 0.1rem; }
+.followups .chip { font-size: 0.82rem; text-align: left; }
 .composer { display: flex; gap: 0.5rem; }
 .composer input { flex: 1; padding: 0.6rem 0.7rem; border: 1px solid var(--line); border-radius: 8px; }
 
