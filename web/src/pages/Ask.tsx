@@ -17,22 +17,47 @@ interface Turn {
   response?: ChatResponse;
 }
 
+interface HistoryTurn {
+  role: "user" | "model";
+  text: string;
+}
+
+// Carry the conversation so follow-ups have context: each prior turn becomes a
+// user message + a model message containing the answer AND the SQL it ran, so
+// the model can build on previous queries ("show that by program", "what about
+// 2022?"). The last ~10 turns are sent to keep the payload bounded.
+function buildHistory(turns: Turn[]): HistoryTurn[] {
+  const history: HistoryTurn[] = [];
+  for (const t of turns.slice(-10)) {
+    if (!t.response || t.response.error) continue;
+    history.push({ role: "user", text: t.question });
+    const sql = t.response.queries.length
+      ? `\n\nSQL I ran:\n${t.response.queries.join(";\n")}`
+      : "";
+    history.push({ role: "model", text: `${t.response.answer}${sql}` });
+  }
+  return history;
+}
+
 export function Ask() {
   const [turns, setTurns] = useState<Turn[]>([]);
   const [input, setInput] = useState("");
 
   const ask = useMutation({
-    mutationFn: (q: string) => api.chat(q),
-    onSuccess: (response, q) =>
-      setTurns((t) => t.map((turn) => (turn.question === q && !turn.response ? { ...turn, response } : turn))),
+    mutationFn: ({ q, history }: { q: string; history: HistoryTurn[] }) => api.chat(q, history),
+    onSuccess: (response, { q }) =>
+      setTurns((t) =>
+        t.map((turn) => (turn.question === q && !turn.response ? { ...turn, response } : turn)),
+      ),
   });
 
   const submit = (q: string, source: string = "input") => {
     if (!q.trim()) return;
     track("ask_question", { source, turn: turns.length + 1 });
+    const history = buildHistory(turns);
     setTurns((t) => [...t, { question: q }]);
     setInput("");
-    ask.mutate(q);
+    ask.mutate({ q, history });
   };
 
   return (
