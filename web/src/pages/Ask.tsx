@@ -55,7 +55,15 @@ export function Ask() {
         {turns.map((t, i) => (
           <div key={i} className="turn">
             <div className="msg user">{t.question}</div>
-            {t.response ? <Answer response={t.response} /> : <div className="msg assistant muted">Querying…</div>}
+            {t.response ? (
+              <Answer
+                response={t.response}
+                onPick={submit}
+                showSuggestions={i === turns.length - 1 && !ask.isPending}
+              />
+            ) : (
+              <div className="msg assistant muted">Querying…</div>
+            )}
           </div>
         ))}
         {ask.isError && <div className="error">Request failed: {String(ask.error)}</div>}
@@ -81,7 +89,15 @@ export function Ask() {
   );
 }
 
-function Answer({ response }: { response: ChatResponse }) {
+function Answer({
+  response,
+  onPick,
+  showSuggestions,
+}: {
+  response: ChatResponse;
+  onPick: (q: string) => void;
+  showSuggestions: boolean;
+}) {
   if (response.error) return <div className="msg assistant error">{response.error}</div>;
   const table = response.table ?? [];
   const cols = table.length ? Object.keys(table[0]) : [];
@@ -115,6 +131,16 @@ function Answer({ response }: { response: ChatResponse }) {
             </tbody>
           </table>
         </Card>
+      )}
+      {showSuggestions && response.suggestions?.length > 0 && (
+        <div className="followups">
+          <span className="followups-label">Follow up:</span>
+          {response.suggestions.map((s) => (
+            <button key={s} className="chip" onClick={() => onPick(s)}>
+              {s}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

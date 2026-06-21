@@ -13,6 +13,7 @@ The model id defaults to a current Gemini model and is overridable via
 
 from __future__ import annotations
 
+import json
 import os
 import re
 from dataclasses import dataclass, field
@@ -24,6 +25,9 @@ from . import queries as q
 DEFAULT_MODEL = os.environ.get("CU_OPENALEX_CHAT_MODEL", "gemini-2.5-flash")
 MAX_RESULT_ROWS = 200
 MAX_TOOL_ITERS = 6
+# Generous output budget — Gemini 2.5's "thinking" tokens draw from this, so a
+# low cap can truncate the actual answer mid-sentence.
+MAX_OUTPUT_TOKENS = 20000
 
 
 def _api_key() -> str | None:
@@ -142,6 +146,7 @@ class ChatResult:
     answer: str
     queries: list[str] = field(default_factory=list)
     tables: list[pl.DataFrame] = field(default_factory=list)
+    suggestions: list[str] = field(default_factory=list)
     error: str | None = None
 
 
@@ -207,7 +212,7 @@ def ask(question: str, history: list[dict] | None = None, model: str | None = No
         system_instruction=SYSTEM_PROMPT,
         tools=[tool],
         temperature=0,
-        max_output_tokens=1500,
+        max_output_tokens=MAX_OUTPUT_TOKENS,
     )
 
     contents = _history_to_contents(history, types)
@@ -226,6 +231,8 @@ def ask(question: str, history: list[dict] | None = None, model: str | None = No
         calls = resp.function_calls or []
         if not calls:
             result.answer = (resp.text or "").strip()
+            contents.append(resp.candidates[0].content)
+            result.suggestions = _suggest_followups(client, contents, types, model)
             return result
 
         # Record the model's turn, then answer each function call.
@@ -246,3 +253,47 @@ def ask(question: str, history: list[dict] | None = None, model: str | None = No
     result.answer = "I wasn't able to converge on an answer within the query budget."
     result.error = "max_tool_iterations"
     return result
+
+
+def _suggest_followups(client, contents: list, types, model: str | None) -> list[str]:
+    """Ask the model for 3 short follow-up questions to keep the chat going.
+
+    A cheap no-tool call with JSON structured output; returns [] on any failure
+    (suggestions are a nicety, never block the answer).
+    """
+    instruction = types.Content(
+        role="user",
+        parts=[
+            types.Part(
+                text=(
+                    "Based on this conversation, suggest exactly 3 short, specific "
+                    "follow-up questions the user might ask next. Each under ~12 words, "
+                    "distinct from what was already asked. ONLY ask things answerable "
+                    "from the tables described above (publications, programs, members, "
+                    "collaboration, topics, institutions, impact) — never invent entities "
+                    "like patients, trials, or grants. Return a JSON array of 3 strings."
+                )
+            )
+        ],
+    )
+    try:
+        resp = client.models.generate_content(
+            model=model or DEFAULT_MODEL,
+            contents=[*contents, instruction],
+            config=types.GenerateContentConfig(
+                # Ground suggestions in the schema so they stay answerable.
+                system_instruction=SYSTEM_PROMPT,
+                temperature=0.6,
+                max_output_tokens=300,
+                # Disable "thinking" so the token budget goes to the JSON output.
+                thinking_config=types.ThinkingConfig(thinking_budget=0),
+                response_mime_type="application/json",
+                response_schema=types.Schema(
+                    type=types.Type.ARRAY, items=types.Schema(type=types.Type.STRING)
+                ),
+            ),
+        )
+        data = json.loads(resp.text or "[]")
+        return [str(s).strip() for s in data if str(s).strip()][:3]
+    except Exception:  # pragma: no cover - suggestions are best-effort
+        return []

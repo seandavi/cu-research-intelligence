@@ -140,6 +140,7 @@ export interface ChatResponse {
   answer: string;
   queries: string[];
   table: Record<string, unknown>[] | null;
+  suggestions: string[];
   error: string | null;
 }
 
