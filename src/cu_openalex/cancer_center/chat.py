@@ -86,6 +86,14 @@ TABLE institutions  -- work x institution bridge (for inter-institutional)
   collaborators with: SELECT institution_name, count(DISTINCT work_id) FROM
   institutions WHERE NOT is_home GROUP BY 1 ORDER BY 2 DESC.
 
+TABLE member_grants  -- NIH RePORTER grants matched to members by PI name
+  member_id, core_project_num (the grant; use count(DISTINCT) for # of grants),
+  project_num, fiscal_year, activity_code (e.g. 'R01','P30','F32'), agency_ic
+  (NIH institute, e.g. 'NCI'), award_amount, direct_cost_amt, is_active,
+  is_contact_pi, project_title, program (member's program), match_type.
+  One row per member per funded year; sum(award_amount) for total funding.
+  (May be absent if grants haven't been built.)
+
 KEY DEFINITIONS (NCI CCSG convention):
 - intra-programmatic publication: >=2 cancer-center members of the SAME program.
 - inter-programmatic publication: members of >=2 DIFFERENT programs (can also be

@@ -63,6 +63,15 @@ export const useTopCollaborators = (r?: YearRange, limit = 20) =>
 export const useInterInstTrend = (r?: YearRange) =>
   useQuery({ queryKey: key("iitrend", r), queryFn: () => api.interInstTrend(r), enabled: !!r });
 
+export const useGrantsSummary = (r?: YearRange) =>
+  useQuery({ queryKey: key("grant_sum", r), queryFn: () => api.grantsSummary(r), enabled: !!r });
+
+export const useGrantsByProgram = (r?: YearRange) =>
+  useQuery({ queryKey: key("grant_prog", r), queryFn: () => api.grantsByProgram(r), enabled: !!r });
+
+export const useGrantsByAgency = (r?: YearRange) =>
+  useQuery({ queryKey: key("grant_agency", r), queryFn: () => api.grantsByAgency(r), enabled: !!r });
+
 export const useMemberProfile = (id: number | undefined, r?: YearRange) =>
   useQuery({
     queryKey: key("member", r, id),

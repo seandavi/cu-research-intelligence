@@ -8,6 +8,38 @@ export interface Meta {
   indexing_lag_from: number;
   current_programs: string[];
   all_programs: string[];
+  grants_available: boolean;
+}
+
+export interface MemberGrant {
+  core_project_num: string;
+  activity_code: string | null;
+  agency: string | null;
+  latest_fy: number;
+  title: string | null;
+  total_award: number | null;
+  is_contact_pi: boolean;
+  is_active: boolean;
+}
+
+export interface GrantSummary {
+  grants: number;
+  funded_members: number;
+  total_award: number | null;
+  r01_grants: number;
+}
+
+export interface GrantProgramRow {
+  program: string;
+  grants: number;
+  funded_members: number;
+  total_award: number | null;
+}
+
+export interface GrantAgencyRow {
+  agency: string;
+  grants: number;
+  total_award: number | null;
 }
 
 export interface PublicationRow {
@@ -182,6 +214,7 @@ export interface MemberProfile {
   top_topics: { topic: string; publications: number }[];
   top_journals: { journal: string; publications: number }[];
   top_coauthors: { member_id: number; name: string; program: string; shared: number }[];
+  grants: MemberGrant[];
 }
 
 export interface NetworkNode {

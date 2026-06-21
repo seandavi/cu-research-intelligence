@@ -13,7 +13,7 @@ import type { YearRange } from "../api/types";
 import { Card, Caveat, ErrorNote, KpiCard, Loading } from "../components/ui";
 import { useMemberProfile } from "../hooks/useApi";
 import { track } from "../lib/analytics";
-import { fmtInt, fmtNum, fmtPct } from "../lib/format";
+import { fmtInt, fmtMoney, fmtNum, fmtPct } from "../lib/format";
 
 export function MemberProfile({ range }: { range: YearRange }) {
   const { id } = useParams();
@@ -28,7 +28,9 @@ export function MemberProfile({ range }: { range: YearRange }) {
   if (profile.error) return <ErrorNote error={profile.error} />;
   if (!profile.data) return <ErrorNote error="Member not found" />;
 
-  const { member, summary, by_year, top_topics, top_journals, top_coauthors } = profile.data;
+  const { member, summary, by_year, top_topics, top_journals, top_coauthors, grants } =
+    profile.data;
+  const grantTotal = grants.reduce((s, g) => s + (g.total_award ?? 0), 0);
 
   return (
     <>
@@ -117,6 +119,48 @@ export function MemberProfile({ range }: { range: YearRange }) {
           </ul>
         </Card>
       </div>
+
+      {grants.length > 0 && (
+        <Card title={`NIH grants — ${grants.length} (${fmtMoney(grantTotal)} total)`}>
+          <p className="hint">
+            NIH RePORTER grants where this member is a named PI (University of Colorado Denver),
+            matched by name. Award = sum across funded years.
+          </p>
+          <table className="data">
+            <thead>
+              <tr>
+                <th>Project</th>
+                <th>Type</th>
+                <th>NIH IC</th>
+                <th>Title</th>
+                <th className="num">Latest FY</th>
+                <th className="num">Total award</th>
+              </tr>
+            </thead>
+            <tbody>
+              {grants.map((g) => (
+                <tr key={g.core_project_num}>
+                  <td>
+                    <a
+                      href={`https://reporter.nih.gov/search/?projects=${g.core_project_num}`}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {g.core_project_num}
+                    </a>
+                    {g.is_active && <span className="badge high oa">active</span>}
+                  </td>
+                  <td>{g.activity_code}</td>
+                  <td>{g.agency}</td>
+                  <td>{g.title}</td>
+                  <td className="num">{g.latest_fy}</td>
+                  <td className="num">{fmtMoney(g.total_award)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Card>
+      )}
 
       <p className="muted">Open access: {fmtPct(summary.pct_open_access)} of publications.</p>
       <Caveat />

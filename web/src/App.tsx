@@ -16,6 +16,7 @@ const Programs = lazy(() => import("./pages/Programs").then((m) => ({ default: m
 const Institutions = lazy(() =>
   import("./pages/Institutions").then((m) => ({ default: m.Institutions })),
 );
+const Funding = lazy(() => import("./pages/Funding").then((m) => ({ default: m.Funding })));
 const Networks = lazy(() => import("./pages/Networks").then((m) => ({ default: m.Networks })));
 const Members = lazy(() => import("./pages/Members").then((m) => ({ default: m.Members })));
 const MemberProfile = lazy(() =>
@@ -47,6 +48,7 @@ export function App() {
         <Route path="publications" element={<WithFilter range={range} setRange={setRange}>{(r) => <Publications range={r} />}</WithFilter>} />
         <Route path="programs" element={<WithFilter range={range} setRange={setRange}>{(r) => <Programs range={r} />}</WithFilter>} />
         <Route path="institutions" element={<WithFilter range={range} setRange={setRange}>{(r) => <Institutions range={r} />}</WithFilter>} />
+        <Route path="funding" element={<WithFilter range={range} setRange={setRange}>{(r) => <Funding range={r} />}</WithFilter>} />
         <Route path="networks" element={<WithFilter range={range} setRange={setRange}>{(r) => <Networks range={r} />}</WithFilter>} />
         <Route path="members" element={<WithFilter range={range} setRange={setRange}>{(r) => <Members range={r} />}</WithFilter>} />
         <Route path="members/:id" element={<WithFilter range={range} setRange={setRange}>{(r) => <MemberProfile range={r} />}</WithFilter>} />
