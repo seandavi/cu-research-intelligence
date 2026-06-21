@@ -386,13 +386,19 @@ def grants_by_agency(
 
 
 def member_grants(member_id: int) -> list[dict]:
-    """A member's grants (distinct project, latest year, total award) for profiles."""
+    """A member's grants (distinct project, latest year, total award) for profiles.
+
+    "Active" is derived from the project end date (>= today), not RePORTER's
+    ``is_active`` flag, which under-reports ongoing awards (e.g. a U54 running to
+    2029 is flagged inactive).
+    """
     return run_sql(
         f"""
         SELECT core_project_num, any_value(activity_code) AS activity_code,
                any_value(agency_ic) AS agency, max(fiscal_year) AS latest_fy,
                max(project_title) AS title, sum(award_amount)::BIGINT AS total_award,
-               bool_or(is_contact_pi) AS is_contact_pi, bool_or(is_active) AS is_active
+               bool_or(is_contact_pi) AS is_contact_pi,
+               (max(TRY_CAST(project_end_date AS TIMESTAMP)) >= current_date) AS is_active
         FROM member_grants WHERE member_id = {int(member_id)}
         GROUP BY core_project_num ORDER BY total_award DESC
         """
