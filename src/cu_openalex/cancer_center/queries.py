@@ -72,6 +72,34 @@ def run_params(sql: str, params: list) -> pl.DataFrame:
         return connect().execute(sql, params).pl()
 
 
+def _ensure_fts(con: duckdb.DuckDBPyConnection) -> bool:
+    """Lazily build a BM25 full-text index over title + abstract.
+
+    Builds a ``works_search`` table and its FTS index on first use (~5s), so the
+    cost is paid only when someone searches, not on every page load. Returns
+    False if abstracts aren't available (older builds) — callers fall back to
+    substring search. Must be called under ``_LOCK``.
+    """
+    exists = con.execute(
+        "SELECT count(*) FROM information_schema.tables WHERE table_name = 'works_search'"
+    ).fetchone()[0]
+    if exists:
+        return True
+    cols = {r[0] for r in con.execute("DESCRIBE SELECT * FROM works").fetchall()}
+    if "abstract" not in cols:
+        return False
+    con.execute("INSTALL fts; LOAD fts;")
+    con.execute(
+        "CREATE TABLE works_search AS "
+        "SELECT work_id, title, COALESCE(abstract, '') AS abstract FROM works"
+    )
+    con.execute(
+        "PRAGMA create_fts_index('works_search', 'work_id', 'title', 'abstract', "
+        "stemmer='porter', stopwords='english', overwrite=1)"
+    )
+    return True
+
+
 def _year_clause(
     min_year: int | None,
     max_year: int | None,
@@ -417,68 +445,99 @@ def search_publications(
 ) -> dict:
     """Filtered, sorted, paginated publication search.
 
-    All values are bound as query parameters (injection-safe); ``sort`` and
-    ``collaboration_class`` are validated against allow-lists. ``programs`` keeps
-    publications touching *any* of the named programs. Returns
-    ``{total, page, page_size, rows}``.
+    When ``q`` is given, it is a **BM25 full-text** query over title + abstract
+    (DuckDB FTS, Porter-stemmed); ``sort='relevance'`` ranks by that score. If the
+    FTS index isn't available (older build without abstracts), ``q`` falls back to
+    a title substring match. All values are bound as query parameters
+    (injection-safe); ``sort`` / ``collaboration_class`` are allow-listed.
+    Returns ``{total, page, page_size, rows}``.
     """
-    conds = ["is_publication"]
+    fts = bool(q) and _fts_ready()
+
+    conds = ["w.is_publication"]
     params: list = []
 
     def add(cond: str, value) -> None:
         conds.append(cond)
         params.append(value)
 
-    if q:
-        add("title ILIKE ?", f"%{q}%")
     if min_year is not None:
-        add("publication_year >= ?", min_year)
+        add("w.publication_year >= ?", min_year)
     if max_year is not None:
-        add("publication_year <= ?", max_year)
+        add("w.publication_year <= ?", max_year)
     if programs:
-        add("list_has_any(programs, ?)", list(programs))
+        add("list_has_any(w.programs, ?)", list(programs))
     if collaboration_class in _COLLAB_CLASSES:
-        add("collaboration_class = ?", collaboration_class)
+        add("w.collaboration_class = ?", collaboration_class)
     if is_oa is not None:
-        add("is_oa = ?", is_oa)
+        add("w.is_oa = ?", is_oa)
     if inter_institutional is not None:
-        add("has_external_collab = ?", inter_institutional)
+        add("w.has_external_collab = ?", inter_institutional)
     if topic_field:
-        add("topic_field = ?", topic_field)
+        add("w.topic_field = ?", topic_field)
     if journal:
-        add("source_name ILIKE ?", f"%{journal}%")
+        add("w.source_name ILIKE ?", f"%{journal}%")
     if author:
         add(
-            "work_id IN (SELECT w.work_id FROM works w, UNNEST(w.cc_member_ids) t(mid) "
+            "w.work_id IN (SELECT s.work_id FROM works s, UNNEST(s.cc_member_ids) t(mid) "
             "JOIN members m ON m.Member_ID = t.mid "
             "WHERE lower(m.First_Name || ' ' || m.Last_Name) LIKE ?)",
             f"%{author.lower()}%",
         )
     if min_citations is not None:
-        add("cited_by_count >= ?", min_citations)
+        add("w.cited_by_count >= ?", min_citations)
     if min_rcr is not None:
-        add("rcr >= ?", min_rcr)
+        add("w.rcr >= ?", min_rcr)
+    if q and not fts:
+        add("w.title ILIKE ?", f"%{q}%")
+
+    # BM25-ranked join when full-text searching. Its parameter is bound first
+    # because the join clause precedes the WHERE conditions in the SQL text.
+    if fts:
+        # conjunctive := all query terms must appear (intuitive AND search).
+        join = (
+            "JOIN (SELECT work_id, score FROM ("
+            "SELECT work_id, fts_main_works_search.match_bm25(work_id, ?, conjunctive := 1) "
+            "AS score FROM works_search) WHERE score IS NOT NULL) r ON r.work_id = w.work_id"
+        )
+        front: list = [q]
+    else:
+        join, front = "", []
 
     where = " AND ".join(conds)
-    sort_col = _SORT_COLUMNS.get(sort, "cited_by_count")
-    direction = "DESC" if descending else "ASC"
+    if sort == "relevance" and fts:
+        order = "r.score DESC, w.cited_by_count DESC NULLS LAST"
+    else:
+        sort_col = _SORT_COLUMNS.get(sort, "cited_by_count")
+        direction = "DESC" if descending else "ASC"
+        order = f"w.{sort_col} {direction} NULLS LAST, w.publication_year DESC"
+
     page = max(1, page)
     page_size = max(1, min(page_size, 200))
     offset = (page - 1) * page_size
 
-    total = int(run_params(f"SELECT count(*) AS n FROM works WHERE {where}", params)["n"][0])
+    count_sql = f"SELECT count(*) AS n FROM works w {join} WHERE {where}"
+    total = int(run_params(count_sql, [*front, *params])["n"][0])
     rows = run_params(
         f"""
-        SELECT work_id, title, publication_year, doi, pmid, type, source_name,
-               cited_by_count, fwci, rcr, is_oa, oa_status, primary_topic, topic_field,
-               programs, collaboration_class, has_external_collab, is_international
-        FROM works WHERE {where}
-        ORDER BY {sort_col} {direction} NULLS LAST, publication_year DESC
+        SELECT w.work_id, w.title, left(w.abstract, 320) AS snippet,
+               w.publication_year, w.doi, w.pmid, w.type, w.source_name,
+               w.cited_by_count, w.fwci, w.rcr, w.is_oa, w.oa_status,
+               w.primary_topic, w.topic_field, w.programs, w.collaboration_class,
+               w.has_external_collab, w.is_international
+        FROM works w {join} WHERE {where}
+        ORDER BY {order}
         LIMIT ? OFFSET ?
         """,
-        [*params, page_size, offset],
+        [*front, *params, page_size, offset],
     )
     return {"total": total, "page": page, "page_size": page_size, "rows": rows.to_dicts()}
+
+
+def _fts_ready() -> bool:
+    """True if the BM25 index is available (lazily built on first call)."""
+    with _LOCK:
+        return _ensure_fts(connect())
 
 
 def member_profile(

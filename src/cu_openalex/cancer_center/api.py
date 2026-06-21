@@ -87,7 +87,7 @@ def publications(
     author: str | None = None,
     min_citations: int | None = Query(None, ge=0),
     min_rcr: float | None = Query(None, ge=0),
-    sort: str = Query("citations", pattern="^(citations|rcr|fwci|year|title)$"),
+    sort: str = Query("citations", pattern="^(relevance|citations|rcr|fwci|year|title)$"),
     descending: bool = True,
     page: int = Query(1, ge=1),
     page_size: int = Query(50, ge=1, le=200),

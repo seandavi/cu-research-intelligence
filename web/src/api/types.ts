@@ -13,6 +13,7 @@ export interface Meta {
 export interface PublicationRow {
   work_id: string;
   title: string | null;
+  snippet: string | null;
   publication_year: number;
   doi: string | null;
   pmid: string | null;

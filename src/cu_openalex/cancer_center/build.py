@@ -212,6 +212,27 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
             GROUP BY work_id
             """
         )
+        # Reconstruct abstract text from OpenAlex's abstract_inverted_index
+        # ({word: [positions]}) for full-text search (~64% of works have one).
+        con.execute("INSTALL json; LOAD json;")
+        con.execute(
+            f"""
+            CREATE TABLE abstract_lookup AS
+            WITH entries AS (
+                SELECT r.work_id,
+                       UNNEST(map_entries(CAST(
+                           json_extract(r.raw_json, '$.abstract_inverted_index')
+                           AS MAP(VARCHAR, INTEGER[])))) AS ent
+                FROM '{_RAW_WORKS_GLOB}' r JOIN cc_workids c USING (work_id)
+                WHERE json_extract(r.raw_json, '$.abstract_inverted_index') IS NOT NULL
+            ),
+            positions AS (
+                SELECT work_id, ent.key AS word, UNNEST(ent.value) AS pos FROM entries
+            )
+            SELECT work_id, string_agg(word, ' ' ORDER BY pos) AS abstract
+            FROM positions GROUP BY work_id
+            """
+        )
         # Institutions per cc work (from authorships_json), joined to the
         # institutions dimension for country. Drives inter-institutional metrics.
         _build_institutions(con)
@@ -226,13 +247,14 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                    -- supplements (issue like "14_suppl"). Excluded from pubs.
                    (w.title ILIKE 'Abstract %' OR lower(il.issue) LIKE '%suppl%')
                        AS is_meeting_abstract,
-                   rc.rcr, rc.nih_percentile,
+                   rc.rcr, rc.nih_percentile, ab.abstract,
                    COALESCE(ia.n_institutions, 0) AS n_institutions,
                    COALESCE(ia.has_external_collab, FALSE) AS has_external_collab,
                    COALESCE(ia.is_international, FALSE) AS is_international
             FROM '{_WORKS_GLOB}' w
             JOIN cc_workids c USING (work_id)
             LEFT JOIN issue_lookup il USING (work_id)
+            LEFT JOIN abstract_lookup ab USING (work_id)
             LEFT JOIN doi_pmid dp
                 ON dp.doi = regexp_replace(lower(w.doi), '^https?://(dx\\.)?doi\\.org/', '')
             LEFT JOIN rcr_cw rc
@@ -290,7 +312,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                     SELECT work_id, max(n_in_prog) AS max_in_one_program
                     FROM prog_counts GROUP BY work_id
                 )
-                SELECT w.work_id, w.title, w.publication_year, w.publication_date,
+                SELECT w.work_id, w.title, m.abstract, w.publication_year, w.publication_date,
                        w.doi, m.pmid_final AS pmid, w.pmcid, w.type,
                        w.cited_by_count, w.fwci, m.rcr, m.nih_percentile,
                        w.is_oa, w.oa_status, w.is_retracted,

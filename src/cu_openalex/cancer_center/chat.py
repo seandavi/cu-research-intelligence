@@ -51,7 +51,8 @@ TABLE members  -- one row per roster member (1,143 rows)
   confidence ('high'/'medium'/'low'; how reliable the author match is)
 
 TABLE works  -- one row per work with >=1 member author
-  work_id, title, publication_year, doi, pmid, type, cited_by_count,
+  work_id, title, abstract (reconstructed text; NULL for ~36%),
+  publication_year, doi, pmid, type, cited_by_count,
   is_publication (bool: TRUE for peer-reviewed article/review; FALSE for
     preprints/supplementary/datasets -- ADD `WHERE is_publication` for any
     publication count, this is the default everywhere else),

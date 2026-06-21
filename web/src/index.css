@@ -129,6 +129,7 @@ table.data a:hover { text-decoration: underline; }
 .badge.oa { margin-left: 0.4rem; font-size: 0.65rem; vertical-align: middle; }
 .tag { margin-left: 0.35rem; color: var(--accent); }
 .pchip { display: inline-block; background: #eef2f7; color: #44546a; border-radius: 4px; padding: 0 0.3rem; margin-right: 0.2rem; font-size: 0.7rem; font-weight: 600; }
+.snippet { color: var(--muted); font-size: 0.78rem; line-height: 1.4; margin-top: 0.2rem; max-width: 620px; }
 
 .loading { color: var(--muted); padding: 2rem 0; }
 .error { color: #c53030; background: #fdeaea; padding: 0.6rem 0.8rem; border-radius: 8px; }

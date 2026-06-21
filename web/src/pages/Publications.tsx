@@ -10,7 +10,7 @@ export function Publications({ range }: { range: YearRange }) {
   const meta = useMeta();
   // Committed filters (sent to the API).
   const [filters, setFilters] = useState<PublicationFilters>({
-    sort: "citations",
+    sort: "relevance",
     descending: true,
     page: 1,
     page_size: PAGE_SIZE,
@@ -58,17 +58,18 @@ export function Publications({ range }: { range: YearRange }) {
     <>
       <h1>Publications</h1>
       <p className="lede">
-        Search and filter the cancer-center publication corpus. Peer-reviewed articles &amp;
-        reviews only; counts respect the year range (top-right).
+        Full-text search (title &amp; abstract, BM25-ranked) and filter the cancer-center
+        publication corpus. Peer-reviewed articles &amp; reviews only; counts respect the year
+        range (top-right).
       </p>
 
       <Card>
         <div className="filters">
           <input
-            placeholder="Search title…"
+            placeholder="Search title & abstract…"
             value={text.q}
             onChange={(e) => setText({ ...text, q: e.target.value })}
-            style={{ minWidth: 220 }}
+            style={{ minWidth: 240 }}
           />
           <input
             placeholder="Author name…"
@@ -93,6 +94,7 @@ export function Publications({ range }: { range: YearRange }) {
             value={filters.sort}
             onChange={(e) => patch({ sort: e.target.value })}
           >
+            <option value="relevance">Sort: Relevance</option>
             <option value="citations">Sort: Citations</option>
             <option value="rcr">Sort: RCR</option>
             <option value="fwci">Sort: FWCI</option>
@@ -206,6 +208,7 @@ function Row({ r }: { r: PublicationRow }) {
         )}
         {r.is_oa && <span className="badge high oa">OA</span>}
         {r.has_external_collab && <span className="tag" title="Inter-institutional">↔</span>}
+        {r.snippet && <div className="snippet">{r.snippet}…</div>}
       </td>
       <td>{r.publication_year}</td>
       <td>{shorten(r.source_name ?? "—", 28)}</td>
