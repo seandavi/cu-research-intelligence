@@ -146,6 +146,82 @@ Set `CU_OPENALEX_STORAGE_BASE_URI=s3://your-bucket/openalex` and the `R2_*` vars
 in `.env`. No code change — DuckDB `COPY` and Polars both write S3-compatible
 objects; snapshot reads stay anonymous over HTTPS.
 
+## Cancer Center subsection
+
+A research-intelligence layer for the **University of Colorado Cancer Center**
+(UCCC) sits on top of the institution-wide tables: it resolves the membership
+roster (`data/external/Members-AllEver-withIDs_*.xlsx`) to OpenAlex authors,
+attributes works to research **programs**, and classifies every publication by
+collaboration type — the intra- vs inter-programmatic metrics an NIH Cancer
+Center Support Grant (CCSG / P30) External Advisory Board reviews. See
+**ADR-0013**.
+
+```bash
+# 1. Build the curated cohort tables (offline, from the works corpus; ~2s)
+uv run python -m cu_openalex.cancer_center.build
+#    -> data/cancer_center/{members,works,member_works}.parquet
+
+# 2. Launch the dashboard + chat (Streamlit, optional 'dashboard' extra)
+uv run --extra dashboard streamlit run \
+    src/cu_openalex/cancer_center/dashboard/Home.py
+```
+
+Pages: leadership **overview**, **publications** over time, **program
+collaboration** (the intra/inter heatmap + trends), research **expertise**,
+co-authorship **networks**, a **member** directory, and **Ask** — a
+natural-language interface that turns questions into read-only SQL with Gemini
+(set `GEMINI_API_KEY` on the server; model via `CU_OPENALEX_CHAT_MODEL`).
+
+**Method & caveats** (ADR-0013): members are matched by ORCID + name with a
+recorded confidence tier; ~700/1,143 resolve, so collaboration counts are lower
+bounds. A conflation guard drops OpenAlex `author_id`s with impossible
+`works_count`. Counts are peer-reviewed articles & reviews — preprints,
+supplementary files, datasets, and **conference abstracts** are excluded.
+Within-year *ratios* (collaboration %, OA %, FWCI, RCR) are more reliable than
+absolute counts, which undercount for the most recent years (OpenAlex indexing
+lag). The dashboard surfaces these caveats inline.
+
+**Impact metrics**: field-weighted citation impact (FWCI) ships in the curated
+works; NIH iCite **RCR** and a DOI→PMID backfill are added by
+`cancer_center.enrich` (resumable caches under `data/cancer_center/enrich/`) and
+merged on the next `build`. RCR (1.0 = median NIH-funded paper) is the most
+NCI-native metric and is the dashboard's headline impact figure.
+
+### Headless API (FastAPI + DuckDB)
+
+The same query layer is exposed as a JSON API for a custom frontend — no
+database server (DuckDB reads the curated Parquet in-process):
+
+```bash
+uv run --extra api uvicorn cu_openalex.cancer_center.api:app --reload
+# GET /api/kpi · /api/program-summary · /api/program-collaboration-matrix
+# GET /api/publications-by-year · /api/top-topics · /api/members · /api/meta
+# POST /api/chat  {question}   (NL→SQL via Gemini; needs GEMINI_API_KEY)
+```
+
+### React frontend (`web/`)
+
+A Vite + React + TypeScript SPA consumes the API — Overview (KPIs + trends),
+Program Collaboration (heatmap + CCSG table + CSV export), Members, and Ask
+(chat). It talks to the API through a typed client (`web/src/api/`).
+
+```bash
+cd web && npm install && npm run dev   # proxies /api → http://localhost:8000
+```
+
+### Containerized deploy behind an existing **Traefik**
+
+`docker compose` builds two services — `api` (FastAPI + DuckDB, internal) and
+`web` (nginx serving the SPA and reverse-proxying `/api` → `api:8000`, the only
+public service). The curated tables mount read-only; no database to run.
+
+```bash
+docker compose up -d --build   # edit the Host()/certresolver labels first
+```
+
+Set `GEMINI_API_KEY` (for chat) and gate the `web` router behind Traefik
+auth for an EAB/leadership audience.
+
 ## Decisions
 
 Architecture decisions live in [`docs/adr/`](docs/adr/). Tasks in

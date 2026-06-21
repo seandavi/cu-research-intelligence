@@ -1,0 +1,56 @@
+# Cancer-center research-intelligence API, fronted by an existing Traefik.
+#
+# Assumes Traefik is already running and attached to an external Docker network
+# (named `traefik` here — change to match yours). The curated Parquet tables are
+# mounted read-only; rebuild them on the host with
+#   uv run python -m cu_openalex.cancer_center.build
+# No database server: the API reads the Parquet through DuckDB in-process.
+#
+#   docker compose up -d --build
+
+services:
+  # FastAPI + DuckDB. Internal only — the web service proxies /api to it, so it
+  # needs no public Traefik route (keeps one origin, simpler CORS).
+  api:
+    build: .
+    image: cu-openalex-api:latest
+    restart: unless-stopped
+    environment:
+      # Server-side Gemini key — enables /api/chat. End users never supply it.
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      # Optional: override the chat model (default gemini-2.5-flash).
+      CU_OPENALEX_CHAT_MODEL: ${CU_OPENALEX_CHAT_MODEL:-}
+    volumes:
+      - ./data/cancer_center:/app/data/cancer_center:ro
+    networks:
+      - internal
+
+  # React SPA on nginx; serves the app and reverse-proxies /api → api:8000.
+  # This is the only public-facing service.
+  web:
+    build: ./web
+    image: cu-openalex-web:latest
+    restart: unless-stopped
+    depends_on: [api]
+    networks:
+      - traefik
+      - internal
+    labels:
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik"
+      # Adjust host + certresolver to your Traefik setup.
+      - "traefik.http.routers.uccc.rule=Host(`uccc.example.org`)"
+      - "traefik.http.routers.uccc.entrypoints=websecure"
+      - "traefik.http.routers.uccc.tls=true"
+      - "traefik.http.routers.uccc.tls.certresolver=letsencrypt"
+      - "traefik.http.services.uccc.loadbalancer.server.port=80"
+      # Strongly recommended for an EAB/leadership tool — gate behind auth:
+      # - "traefik.http.routers.uccc.middlewares=uccc-auth@file"
+
+networks:
+  # Externally-managed network that your Traefik instance is attached to.
+  traefik:
+    external: true
+  # Private network between web (nginx) and api.
+  internal:
+    driver: bridge

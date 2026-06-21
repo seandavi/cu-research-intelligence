@@ -26,3 +26,9 @@ dist/
 
 # Backfill / run logs
 /logs/
+
+# Playwright / dashboard QA artifacts
+.playwright-mcp/
+cc-*.png
+web-*.png
+*.tsbuildinfo
