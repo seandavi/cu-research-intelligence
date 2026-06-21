@@ -1,3 +1,5 @@
+import { track } from "./analytics";
+
 export const fmtInt = (n: number | null | undefined): string =>
   n === null || n === undefined ? "—" : Math.round(n).toLocaleString();
 
@@ -24,6 +26,7 @@ export function programColors(programs: string[]): Record<string, string> {
 export function downloadCsv(input: readonly object[], filename: string): void {
   const rows = input as readonly Record<string, unknown>[];
   if (!rows.length) return;
+  track("export_csv", { dataset: filename, rows: rows.length });
   const cols = Object.keys(rows[0]);
   const esc = (v: unknown) => {
     const s = v === null || v === undefined ? "" : String(v);

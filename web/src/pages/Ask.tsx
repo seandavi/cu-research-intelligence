@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { ChatResponse } from "../api/types";
 import { Card } from "../components/ui";
+import { track } from "../lib/analytics";
 
 const EXAMPLES = [
   "Which programs collaborate most with Cancer Prevention & Control?",
@@ -26,8 +27,9 @@ export function Ask() {
       setTurns((t) => t.map((turn) => (turn.question === q && !turn.response ? { ...turn, response } : turn))),
   });
 
-  const submit = (q: string) => {
+  const submit = (q: string, source: string = "input") => {
     if (!q.trim()) return;
+    track("ask_question", { source, turn: turns.length + 1 });
     setTurns((t) => [...t, { question: q }]);
     setInput("");
     ask.mutate(q);
@@ -44,7 +46,7 @@ export function Ask() {
       {turns.length === 0 && (
         <div className="examples">
           {EXAMPLES.map((ex) => (
-            <button key={ex} onClick={() => submit(ex)}>
+            <button key={ex} onClick={() => submit(ex, "example")}>
               {ex}
             </button>
           ))}
@@ -58,7 +60,7 @@ export function Ask() {
             {t.response ? (
               <Answer
                 response={t.response}
-                onPick={submit}
+                onPick={(q) => submit(q, "suggestion")}
                 showSuggestions={i === turns.length - 1 && !ask.isPending}
               />
             ) : (

@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { Link, useParams } from "react-router-dom";
 import {
   Bar,
@@ -11,12 +12,17 @@ import {
 import type { YearRange } from "../api/types";
 import { Card, Caveat, ErrorNote, KpiCard, Loading } from "../components/ui";
 import { useMemberProfile } from "../hooks/useApi";
+import { track } from "../lib/analytics";
 import { fmtInt, fmtNum, fmtPct } from "../lib/format";
 
 export function MemberProfile({ range }: { range: YearRange }) {
   const { id } = useParams();
   const memberId = id ? Number(id) : undefined;
   const profile = useMemberProfile(memberId, range);
+
+  useEffect(() => {
+    if (memberId !== undefined) track("view_member_profile", { member_id: memberId });
+  }, [memberId]);
 
   if (profile.isLoading) return <Loading />;
   if (profile.error) return <ErrorNote error={profile.error} />;

@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import type { PublicationFilters, PublicationRow, YearRange } from "../api/types";
 import { Card, Caveat, ErrorNote } from "../components/ui";
 import { useMeta, usePublications } from "../hooks/useApi";
+import { track } from "../lib/analytics";
 import { downloadCsv, fmtInt, fmtNum, shorten } from "../lib/format";
 
 const PAGE_SIZE = 50;
@@ -18,17 +19,16 @@ export function Publications({ range }: { range: YearRange }) {
   // Debounced free-text inputs.
   const [text, setText] = useState({ q: "", author: "", journal: "" });
   useEffect(() => {
-    const t = setTimeout(
-      () =>
-        setFilters((f) => ({
-          ...f,
-          q: text.q || undefined,
-          author: text.author || undefined,
-          journal: text.journal || undefined,
-          page: 1,
-        })),
-      350,
-    );
+    const t = setTimeout(() => {
+      setFilters((f) => ({
+        ...f,
+        q: text.q || undefined,
+        author: text.author || undefined,
+        journal: text.journal || undefined,
+        page: 1,
+      }));
+      if (text.q.trim()) track("search", { search_term: text.q.trim() });
+    }, 350);
     return () => clearTimeout(t);
   }, [text]);
 
@@ -44,7 +44,12 @@ export function Publications({ range }: { range: YearRange }) {
   const toggleProgram = (program: string) =>
     setFilters((f) => {
       const cur = new Set(f.programs ?? []);
-      cur.has(program) ? cur.delete(program) : cur.add(program);
+      if (cur.has(program)) {
+        cur.delete(program);
+      } else {
+        cur.add(program);
+        track("filter_program", { program, where: "publications" });
+      }
       return { ...f, programs: cur.size ? [...cur] : undefined, page: 1 };
     });
 
