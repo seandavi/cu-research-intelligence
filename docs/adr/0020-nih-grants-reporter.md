@@ -7,53 +7,65 @@
 
 Research **funding** is a core CCSG metric, but OpenAlex's grant data is empty
 for our corpus (ADR-0010), so the works pipeline cannot supply it. NIH grants are
-available from the public **NIH RePORTER** API, keyed by the grantee
-**organization** — for us "University of Colorado Denver", the legal entity for
-the Anschutz campus. RePORTER records carry structured PIs (first/last name) but
-**no ORCID**, so linking grants to roster members is necessarily name-based.
+available from the public **NIH RePORTER** API. RePORTER records carry structured
+PIs (first/last name) but **no ORCID**, so linking grants to roster members is
+necessarily name-based.
+
+The first cut was **organization-scoped** — fetch grants for grantee org
+"University of Colorado Denver" and match PIs to members. Member review exposed
+two failure modes: (1) it **misses** grants a member co-leads that are
+administered elsewhere — a member can be a multi-PI on a U-award led at another
+institution (e.g. a member's grants with PIs at CUNY and UAB never appear under a
+UC-Denver fetch); and (2) **first-initial** matching mis-credited same-surname
+locals (Shanlee Davis's pediatric grants attributed to Sean Davis).
 
 ## Decision
 
 A `reporter` module pulls grants and matches them to members, mirroring the
-external-enrichment pattern (ADR-0018):
+external-enrichment pattern (ADR-0018), but **PI-centric, not org-scoped**:
 
-- `fetch_grants` — page the RePORTER `projects/search` API by **fiscal year**
-  (its single search caps at 15k records; ~1k/yr here) for the grantee org into a
-  resumable cache, `cancer_center/grants_raw.parquet` (~12.5k awards, FY2010–26).
-- `build_grants` — explode each award's PIs, normalize names, and match to
-  members by **last name + first name** (`exact`) or **last name + first initial**
-  (`initial`), keeping the strongest tier per (award, member). Writes
-  `member_grants.parquet` (one row per member per funded year).
+- `fetch_grants` — query RePORTER `projects/search` by **batched member PI
+  names** (`pi_names` is a precise OR; verified `A`+`B` = `A`∪`B`, a fake name
+  adds nothing), across **all** grantee organizations, paginating each batch into
+  a resumable cache `cancer_center/grants_raw.parquet`.
+- `build_grants` — explode each award's PIs, normalize, and match to members by
+  **exact last + full first name only** (the first-initial tier was removed).
+  Writes `member_grants.parquet` (one row per member per funded year).
 
 Surfaced as: a **Funding** page (center totals, by-program, by-NIH-institute), a
 **grants section on member profiles** (linking to RePORTER), and a
-`member_grants` table the chat can query. All grant surfaces are **gated on the
-data being present** (`grants_available`), so the platform runs unchanged without
-it. Distinct grants use `core_project_num`; funding sums `award_amount` across the
-year-specific awards.
+`member_grants` table the chat can query — all **gated on the data being
+present** (`grants_available`). Distinct grants use `core_project_num`; funding
+sums `award_amount` across the year-specific awards.
 
 ## Consequences
 
-- The center gets NIH funding metrics it could not derive from OpenAlex —
-  ~654 grants / ~$1.2B / 305 funded members over a 7-year window, NCI-led, with
-  the center's own P30 CCSG correctly attributed.
-- Attribution is a **name match** against the roster (no ORCID in RePORTER):
-  exact-name dominates (~93%), but common names can mis-credit; `match_type` is
-  recorded so this is auditable, and only org="University of Colorado Denver" PIs
-  are considered, which bounds the namespace.
-- Refresh is `python -m cancer_center.reporter` (resumable by fiscal year);
-  independent of the works rebuild.
+- The center gets NIH funding metrics it could not derive from OpenAlex, and a
+  member's grants are captured **wherever administered** (including external MPI
+  awards), not just UC-Denver-administered ones.
+- Attribution is an **exact-name** match against the roster. This eliminated the
+  first-initial false positives, but exact name across all institutions can still
+  mis-credit a same-name PI elsewhere; the surfaces state this, and `profile_id`
+  (a stable RePORTER PI id we capture) is the anchor for a future precise
+  crosswalk.
+- The center totals reflect **members' grants** (the relevant CCSG quantity),
+  not "all money through UC Denver".
+- Refresh is `python -m cancer_center.reporter` (the member name set is the
+  query); independent of the works rebuild.
 - Scope is **NIH only** — non-NIH funding (NSF, DOD, foundations, industry) is
   not represented; the Funding page states this.
 
 ## Alternatives considered
 
+- **Organization-scoped fetch (the first cut).** Rejected — misses members'
+  externally-administered grants and, with first-initial matching, mis-credits
+  same-surname locals. PI-name fetch keyed to the roster is both more complete and
+  more precise.
 - **OpenAlex grants / funders.** Empty upstream for this corpus — not viable.
-- **Match by member ORCID.** RePORTER PIs have no ORCID; name matching is the
-  only available link. (RePORTER `profile_id` could anchor a future, more precise
-  PI crosswalk if we curate it.)
-- **Fetch the whole org with one search.** Rejected — exceeds RePORTER's 15k
-  per-search cap; fiscal-year chunking stays under it and makes the cache
-  resumable.
+- **Match by member ORCID.** RePORTER PIs have no ORCID. The captured
+  `profile_id` could anchor a future member→PI crosswalk for names too common for
+  exact matching.
+- **First-initial name matching.** Removed — for common surnames it credited the
+  wrong person.
 - **Embed the RePORTER calls in the works build.** Rejected — keeps the offline
   rebuild network-free; grants are a separate, optional, cached layer.
