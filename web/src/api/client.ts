@@ -5,6 +5,9 @@ import type {
   ChatResponse,
   CollaborationTrendRow,
   CollaboratorRow,
+  GrantAgencyRow,
+  GrantProgramRow,
+  GrantSummary,
   InterInstTrendRow,
   Kpi,
   MatrixCell,
@@ -82,6 +85,9 @@ export const api = {
     get<CollaboratorRow[]>("/top-collaborators", { ...yr(r), limit }),
   interInstTrend: (r?: YearRange) =>
     get<InterInstTrendRow[]>("/inter-institutional-trend", yr(r)),
+  grantsSummary: (r?: YearRange) => get<GrantSummary>("/grants-summary", yr(r)),
+  grantsByProgram: (r?: YearRange) => get<GrantProgramRow[]>("/grants-by-program", yr(r)),
+  grantsByAgency: (r?: YearRange) => get<GrantAgencyRow[]>("/grants-by-agency", yr(r)),
   network: (r?: YearRange, minShared = 2, program?: string) =>
     get<NetworkData>("/network", { ...yr(r), min_shared: minShared, program }),
   chat: async (question: string, history?: unknown[]): Promise<ChatResponse> => {

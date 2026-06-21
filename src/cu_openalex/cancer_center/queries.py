@@ -49,10 +49,11 @@ def connect() -> duckdb.DuckDBPyConnection:
                 "Run `python -m cu_openalex.cancer_center.build`."
             )
         con.execute(f"CREATE VIEW {name} AS SELECT * FROM '{path}'")
-    # institutions is optional (added later); register it if present.
-    inst = cc_target("institutions")
-    if Path(inst).exists():
-        con.execute(f"CREATE VIEW institutions AS SELECT * FROM '{inst}'")
+    # institutions and member_grants are optional (added later); register if present.
+    for opt in ("institutions", "member_grants"):
+        path = cc_target(opt)
+        if Path(path).exists():
+            con.execute(f"CREATE VIEW {opt} AS SELECT * FROM '{path}'")
     return con
 
 
@@ -70,6 +71,20 @@ def run_params(sql: str, params: list) -> pl.DataFrame:
     """Execute a parameterized read-only query (``?`` placeholders); locked."""
     with _LOCK:
         return connect().execute(sql, params).pl()
+
+
+def table_exists(name: str) -> bool:
+    """True if a view/table ``name`` is registered (for optional datasets)."""
+    with _LOCK:
+        n = connect().execute(
+            "SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name]
+        ).fetchone()[0]
+    return bool(n)
+
+
+def grants_available() -> bool:
+    """True if NIH RePORTER grants have been built (member_grants present)."""
+    return table_exists("member_grants")
 
 
 def _ensure_fts(con: duckdb.DuckDBPyConnection) -> bool:
@@ -318,6 +333,70 @@ def program_combinations(
         GROUP BY programs ORDER BY count DESC
         """
     )
+
+
+# --- NIH grants (RePORTER) ---------------------------------------------------
+
+
+def grants_summary(min_year: int | None = None, max_year: int | None = None) -> dict:
+    """Center-level grant totals over the fiscal-year window."""
+    yc = _year_clause(min_year, max_year, col="fiscal_year", publications_only=False)
+    return run_sql(
+        f"""
+        SELECT count(DISTINCT core_project_num) AS grants,
+               count(DISTINCT member_id) AS funded_members,
+               sum(award_amount)::BIGINT AS total_award,
+               count(DISTINCT core_project_num) FILTER (WHERE activity_code LIKE 'R01%')
+                   AS r01_grants
+        FROM member_grants WHERE {yc}
+        """
+    ).to_dicts()[0]
+
+
+def grants_by_program(min_year: int | None = None, max_year: int | None = None) -> pl.DataFrame:
+    """Per-program distinct grants, funding, and funded members."""
+    yc = _year_clause(min_year, max_year, col="fiscal_year", publications_only=False)
+    return run_sql(
+        f"""
+        SELECT program,
+               count(DISTINCT core_project_num) AS grants,
+               count(DISTINCT member_id) AS funded_members,
+               sum(award_amount)::BIGINT AS total_award
+        FROM member_grants
+        WHERE {yc} AND program NOT IN ('', 'Unknown/ Unaffiliated/ Emeritus')
+        GROUP BY 1 ORDER BY total_award DESC
+        """
+    )
+
+
+def grants_by_agency(
+    min_year: int | None = None, max_year: int | None = None, limit: int = 15
+) -> pl.DataFrame:
+    """Distinct grants and funding by NIH institute/center (agency)."""
+    yc = _year_clause(min_year, max_year, col="fiscal_year", publications_only=False)
+    return run_sql(
+        f"""
+        SELECT agency_ic AS agency,
+               count(DISTINCT core_project_num) AS grants,
+               sum(award_amount)::BIGINT AS total_award
+        FROM member_grants WHERE {yc} AND agency_ic IS NOT NULL
+        GROUP BY 1 ORDER BY grants DESC LIMIT {limit}
+        """
+    )
+
+
+def member_grants(member_id: int) -> list[dict]:
+    """A member's grants (distinct project, latest year, total award) for profiles."""
+    return run_sql(
+        f"""
+        SELECT core_project_num, any_value(activity_code) AS activity_code,
+               any_value(agency_ic) AS agency, max(fiscal_year) AS latest_fy,
+               max(project_title) AS title, sum(award_amount)::BIGINT AS total_award,
+               bool_or(is_contact_pi) AS is_contact_pi, bool_or(is_active) AS is_active
+        FROM member_grants WHERE member_id = {int(member_id)}
+        GROUP BY core_project_num ORDER BY total_award DESC
+        """
+    ).to_dicts()
 
 
 # --- Inter-institutional collaboration ---------------------------------------
@@ -615,6 +694,7 @@ def member_profile(
         ORDER BY co.shared DESC LIMIT 12
         """
     )
+    grants = member_grants(member_id) if grants_available() else []
     return {
         "member": member[0],
         "summary": summary,
@@ -622,4 +702,5 @@ def member_profile(
         "top_topics": top_topics.to_dicts(),
         "top_journals": top_journals.to_dicts(),
         "top_coauthors": top_coauthors.to_dicts(),
+        "grants": grants,
     }

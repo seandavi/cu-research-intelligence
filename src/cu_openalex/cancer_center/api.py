@@ -70,7 +70,31 @@ def meta() -> dict:
         "indexing_lag_from": q.INDEXING_LAG_FROM,
         "current_programs": list(CURRENT_PROGRAMS),
         "all_programs": q.all_programs(),
+        "grants_available": q.grants_available(),
     }
+
+
+@app.get("/api/grants-summary")
+def grants_summary(min_year: int | None = None, max_year: int | None = None) -> dict:
+    if not q.grants_available():
+        raise HTTPException(status_code=404, detail="grants not built")
+    return q.grants_summary(min_year, max_year)
+
+
+@app.get("/api/grants-by-program")
+def grants_by_program(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
+    if not q.grants_available():
+        raise HTTPException(status_code=404, detail="grants not built")
+    return _records(q.grants_by_program(min_year, max_year))
+
+
+@app.get("/api/grants-by-agency")
+def grants_by_agency(
+    min_year: int | None = None, max_year: int | None = None, limit: int = Query(15, ge=1, le=50)
+) -> list[dict]:
+    if not q.grants_available():
+        raise HTTPException(status_code=404, detail="grants not built")
+    return _records(q.grants_by_agency(min_year, max_year, limit=limit))
 
 
 @app.get("/api/publications")

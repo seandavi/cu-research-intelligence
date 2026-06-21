@@ -9,6 +9,15 @@ export const fmtPct = (n: number | null | undefined, digits = 0): string =>
 export const fmtNum = (n: number | null | undefined, digits = 2): string =>
   n === null || n === undefined ? "—" : n.toFixed(digits);
 
+// Compact USD: $1.2B / $340M / $51.3M / $250K.
+export const fmtMoney = (n: number | null | undefined): string => {
+  if (n === null || n === undefined) return "—";
+  if (n >= 1e9) return `$${(n / 1e9).toFixed(1)}B`;
+  if (n >= 1e6) return `$${(n / 1e6).toFixed(1)}M`;
+  if (n >= 1e3) return `$${Math.round(n / 1e3)}K`;
+  return `$${n}`;
+};
+
 export const shorten = (s: string, max = 26): string =>
   s.length <= max ? s : s.slice(0, max - 1) + "…";
 
