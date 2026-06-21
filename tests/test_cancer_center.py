@@ -8,11 +8,16 @@ intra/inter/solo rules (including the "both" overlap case).
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import duckdb
 import pytest
 
 from cu_openalex.cancer_center.chat import UnsafeSQLError, run_safe_sql
 from cu_openalex.cancer_center.members import normalize_name, parse_orcid
+from cu_openalex.cancer_center.paths import cc_target
+
+_HAS_CURATED = Path(cc_target("works")).exists()
 
 
 def test_parse_orcid_variants():
@@ -109,6 +114,7 @@ def test_run_safe_sql_rejects_mutations(sql):
         run_safe_sql(sql)
 
 
+@pytest.mark.skipif(not _HAS_CURATED, reason="curated cancer-center tables not built")
 def test_run_safe_sql_allows_select():
     df = run_safe_sql("SELECT 1 AS n")
     assert df["n"][0] == 1
