@@ -21,8 +21,9 @@ irrelevant for an auth-gated internal tool.
 
 A **Vite + React + TypeScript SPA** (`web/`) consuming the FastAPI service
 through a typed client. Pages: Overview, Publications (FTS search, ADR-0016),
-Program Collaboration (heatmap + UpSet), Inter-institutional, Networks (force
-graph), Members + profiles, and Ask (ADR-0015). Charts use Recharts; the network
+Program Collaboration (heatmap + UpSet), Inter-institutional, Funding (NIH
+grants, ADR-0020), Networks (force graph), Members + profiles, and Ask
+(ADR-0015). Charts use Recharts; the network
 uses a force-graph; the UpSet plot uses `@upsetjs/react`. Heavy routes are
 **lazy-loaded** so the force-graph/UpSet/recharts ship in per-route chunks.
 

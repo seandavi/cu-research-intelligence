@@ -39,6 +39,9 @@ def _api_key() -> str | None:
 
 # Statements/keywords that must never appear — defense in depth on top of the
 # read-only intent (the views are in-memory, but we still refuse mutations).
+# Note: this scans the whole statement, including string literals, so a query
+# whose *content* contains a keyword (e.g. searching for the word "drop") is
+# also rejected. Accepted trade-off: false-rejects are rare and safe (ADR-0015).
 _FORBIDDEN = re.compile(
     r"\b(insert|update|delete|drop|create|alter|attach|copy|pragma|install|"
     r"load|export|set|call|truncate|replace|grant|revoke)\b",
@@ -49,7 +52,7 @@ SCHEMA_DOC = """\
 You query a DuckDB database about the University of Colorado Cancer Center (UCCC).
 Three tables (all already filtered to cancer-center members and their works):
 
-TABLE members  -- one row per roster member (1,143 rows)
+TABLE members  -- one row per roster member (~1,115 rows)
   Member_ID, First_Name, Last_Name, Email, PrimaryProgram (research program),
   FacultyRank, School, Dept, Div, Current_Status ('Active'/'Inactive'/...),
   Member_Type ('Full'/'Associate'/'Affiliate'/...), is_active (bool),
@@ -104,7 +107,7 @@ KEY DEFINITIONS (NCI CCSG convention):
   once per program). To count member pairs, self-join UNNEST(cc_member_ids).
 
 IMPORTANT CAVEATS to mention when relevant:
-- Only ~700 of 1,143 members resolve to an OpenAlex author; collaboration counts
+- Only ~675 of 1,115 members resolve to an OpenAlex author; collaboration counts
   are LOWER BOUNDS. Use `confidence='high'` if the user wants only reliable matches.
 - Recent years (2024+) undercount due to OpenAlex indexing lag. Within-year
   RATIOS (collaboration %, OA %, mean FWCI) are more reliable than absolute counts.

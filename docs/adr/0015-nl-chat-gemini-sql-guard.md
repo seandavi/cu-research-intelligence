@@ -55,6 +55,11 @@ the conversation going; failures degrade to no suggestions.
   hallucinations like inventing a "patients" table).
 - It costs an extra LLM round-trip per turn for suggestions; acceptable, and
   best-effort.
+- The mutating-keyword deny-list scans the whole statement, **including string
+  literals**, so a legitimate query whose content contains a keyword (e.g.
+  searching titles for the word "drop"/"set"/"load") is also rejected. Accepted
+  trade-off: such false-rejects are rare and fail safe; the allow-list on the
+  statement form (single read-only `SELECT`/`WITH`) is the primary guard.
 
 ## Alternatives considered
 

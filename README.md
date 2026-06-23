@@ -159,7 +159,7 @@ Center Support Grant (CCSG / P30) External Advisory Board reviews. See
 ```bash
 # 1. Build the curated cohort tables (offline, from the works corpus; ~2s)
 uv run python -m cu_openalex.cancer_center.build
-#    -> data/cancer_center/{members,works,member_works}.parquet
+#    -> data/cancer_center/{members,works,member_works,institutions}.parquet
 
 # 2. Launch the dashboard + chat (Streamlit, optional 'dashboard' extra)
 uv run --extra dashboard streamlit run \
@@ -173,7 +173,7 @@ natural-language interface that turns questions into read-only SQL with Gemini
 (set `GEMINI_API_KEY` on the server; model via `CU_OPENALEX_CHAT_MODEL`).
 
 **Method & caveats** (ADR-0013): members are matched by ORCID + name with a
-recorded confidence tier; ~700/1,143 resolve, so collaboration counts are lower
+recorded confidence tier; ~675/1,115 resolve, so collaboration counts are lower
 bounds. A conflation guard drops OpenAlex `author_id`s with impossible
 `works_count`. Counts are peer-reviewed articles & reviews — preprints,
 supplementary files, datasets, and **conference abstracts** are excluded.
@@ -202,7 +202,9 @@ uv run --extra api uvicorn cu_openalex.cancer_center.api:app --reload
 ### React frontend (`web/`)
 
 A Vite + React + TypeScript SPA consumes the API — Overview (KPIs + trends),
-Program Collaboration (heatmap + CCSG table + CSV export), Members, and Ask
+Publications (full-text search), Program Collaboration (heatmap + UpSet + CCSG
+table + CSV export), Institutions (inter-institutional collaboration), Funding
+(NIH grants), Networks (co-authorship force graph), Members + profiles, and Ask
 (chat). It talks to the API through a typed client (`web/src/api/`).
 
 ```bash
