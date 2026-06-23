@@ -35,6 +35,16 @@ provide TLS and a place to attach forward-auth for the leadership/EAB audience.
 Kept the Python serving stack (FastAPI) rather than a TypeScript backend so the
 metric logic stays single-sourced; the frontend is a new view, not a rewrite.
 
+## Production binding
+
+Bound to the center's shared Traefik (2026-06-23): external Docker network
+`proxy`, ACME **TLS-ALPN-01** resolver `cloudflare` (Let's Encrypt; no DNS API
+token), served at `insights.uccc.cancerdatasci.org`. Hostnames follow an
+`<app>.uccc.cancerdatasci.org` umbrella so additional cancer-center apps share
+the subdomain and a single wildcard DNS record; router/service labels are
+app-scoped (`uccc-insights`) to avoid collisions. DNS is **gray-cloud** (origin
+A record), which TLS-ALPN-01 requires. See [DEPLOYMENT.md](../DEPLOYMENT.md).
+
 ## Consequences
 
 - One origin behind Traefik (the SPA proxies `/api`), so no CORS in production
