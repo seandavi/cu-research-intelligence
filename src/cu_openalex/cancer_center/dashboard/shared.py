@@ -70,12 +70,18 @@ def member_directory(min_year: int, max_year: int):
 
 @st.cache_data(show_spinner=False)
 def program_options() -> list[str]:
-    rows = q.run_sql(
-        "SELECT DISTINCT PrimaryProgram p FROM members "
-        "WHERE PrimaryProgram IS NOT NULL AND PrimaryProgram NOT IN "
-        "('', 'Unknown/ Unaffiliated/ Emeritus') ORDER BY 1"
-    )
-    return rows["p"].to_list()
+    # Single source of truth lives in the query layer (also serves /api/meta).
+    return q.all_programs()
+
+
+@st.cache_data(show_spinner=False)
+def member_counts() -> tuple[int, int]:
+    """(total roster, resolved-to-OpenAlex) members — for the live coverage caveat."""
+    row = q.run_sql(
+        "SELECT count(*) AS total, "
+        "count(*) FILTER (WHERE author_id IS NOT NULL) AS resolved FROM members"
+    ).to_dicts()[0]
+    return int(row["total"]), int(row["resolved"])
 
 
 # --- Sidebar controls --------------------------------------------------------
@@ -101,15 +107,16 @@ def program_filter(label: str = "Program") -> str | None:
 
 def coverage_caveat(max_year: int) -> None:
     """Render the standing data-provenance caveat (shown once per page)."""
+    total, resolved = member_counts()
     msgs = [
         "**About this data.** Counts are peer-reviewed articles & reviews — "
         "preprints, datasets, and **conference abstracts** excluded. Impact uses "
         "field-weighted citation impact (FWCI) and NIH iCite **RCR** "
         "(1.0 = median NIH-funded paper). Members are matched to OpenAlex authors "
-        "by ORCID and name; ~675 of 1,115 resolve, so collaboration figures are "
-        "**lower bounds**. Only ORCID matches are identity-verified (*high* "
-        "confidence); name matches are *medium*. Within-year *ratios* are more "
-        "reliable than absolute counts.",
+        f"by ORCID and name; {resolved:,} of {total:,} resolve, so collaboration "
+        "figures are **lower bounds**. Only ORCID matches are identity-verified "
+        "(*high* confidence); name matches are *medium*. Within-year *ratios* are "
+        "more reliable than absolute counts.",
     ]
     if max_year >= q.INDEXING_LAG_FROM:
         msgs.append(
