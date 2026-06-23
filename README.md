@@ -216,11 +216,17 @@ cd web && npm install && npm run dev   # proxies /api → http://localhost:8000
 public service). The curated tables mount read-only; no database to run.
 
 ```bash
-docker compose up -d --build   # edit the Host()/certresolver labels first
+docker compose up -d --build
 ```
 
-Set `GEMINI_API_KEY` (for chat) and gate the `web` router behind Traefik
-auth for an EAB/leadership audience.
+The shipped labels target the center's Traefik: external network `proxy`,
+TLS-ALPN cert resolver `cloudflare`, served at
+**<https://insights.uccc.cancerdatasci.org>** under the `<app>.uccc.cancerdatasci.org`
+umbrella. Set `GEMINI_API_KEY` (for chat) and optionally gate the `web` router
+behind `dashboard-auth@file` for an EAB/leadership audience.
+
+Full prerequisites, DNS, first-time TLS issuance, data refresh, and
+troubleshooting are in the **[deployment runbook](docs/DEPLOYMENT.md)**.
 
 ## Decisions
 

@@ -33,23 +33,27 @@ services:
     restart: unless-stopped
     depends_on: [api]
     networks:
-      - traefik
+      - proxy
       - internal
     labels:
       - "traefik.enable=true"
-      - "traefik.docker.network=traefik"
-      # Adjust host + certresolver to your Traefik setup.
-      - "traefik.http.routers.uccc.rule=Host(`uccc.example.org`)"
-      - "traefik.http.routers.uccc.entrypoints=websecure"
-      - "traefik.http.routers.uccc.tls=true"
-      - "traefik.http.routers.uccc.tls.certresolver=letsencrypt"
-      - "traefik.http.services.uccc.loadbalancer.server.port=80"
-      # Strongly recommended for an EAB/leadership tool — gate behind auth:
-      # - "traefik.http.routers.uccc.middlewares=uccc-auth@file"
+      - "traefik.docker.network=proxy"
+      # One app under the uccc.cancerdatasci.org umbrella. Router/service names
+      # are app-scoped (uccc-insights) so additional <app>.uccc.cancerdatasci.org
+      # services can coexist behind the same Traefik. TLS-ALPN issues a per-host
+      # cert on demand once DNS for this name resolves to the host.
+      - "traefik.http.routers.uccc-insights.rule=Host(`insights.uccc.cancerdatasci.org`)"
+      - "traefik.http.routers.uccc-insights.entrypoints=websecure"
+      - "traefik.http.routers.uccc-insights.tls=true"
+      - "traefik.http.routers.uccc-insights.tls.certresolver=cloudflare"
+      - "traefik.http.services.uccc-insights.loadbalancer.server.port=80"
+      # Strongly recommended for an EAB/leadership tool — gate behind auth.
+      # Reuse the existing dashboard-auth middleware, or add a dedicated one:
+      # - "traefik.http.routers.uccc-insights.middlewares=dashboard-auth@file"
 
 networks:
-  # Externally-managed network that your Traefik instance is attached to.
-  traefik:
+  # Externally-managed network that the Traefik instance is attached to.
+  proxy:
     external: true
   # Private network between web (nginx) and api.
   internal:
