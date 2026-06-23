@@ -20,7 +20,6 @@ import type {
   ProgramCombination,
   ProgramSummaryRow,
   PublicationYearRow,
-  TopicRow,
   YearRange,
 } from "./types";
 
@@ -53,8 +52,6 @@ export const api = {
     get<MatrixCell[]>("/program-collaboration-matrix", { ...yr(r), current_only: currentOnly }),
   programCombinations: (r?: YearRange, currentOnly = true) =>
     get<ProgramCombination[]>("/program-combinations", { ...yr(r), current_only: currentOnly }),
-  topTopics: (r?: YearRange, program?: string, fieldLevel = "topic_field", limit = 20) =>
-    get<TopicRow[]>("/top-topics", { ...yr(r), program, field_level: fieldLevel, limit }),
   members: (r?: YearRange) => get<MemberRow[]>("/members", yr(r)),
   member: (id: number, r?: YearRange) => get<MemberProfile>(`/member/${id}`, yr(r)),
   publications: async (f: PublicationFilters): Promise<PublicationResults> => {

@@ -36,13 +36,6 @@ export const useProgramCombinations = (r?: YearRange, currentOnly = true) =>
     enabled: !!r,
   });
 
-export const useTopTopics = (r?: YearRange, program?: string, fieldLevel = "topic_field") =>
-  useQuery({
-    queryKey: key("topics", r, `${program}:${fieldLevel}`),
-    queryFn: () => api.topTopics(r, program, fieldLevel),
-    enabled: !!r,
-  });
-
 export const useMembers = (r?: YearRange) =>
   useQuery({ queryKey: key("members", r), queryFn: () => api.members(r), enabled: !!r });
 
