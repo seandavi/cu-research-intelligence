@@ -442,6 +442,11 @@ def inter_institutional_trend(
 
 # --- Expertise / topics ------------------------------------------------------
 
+# Allow-listed topic columns: ``field_level`` is interpolated as a column name,
+# so it must never carry user input verbatim. Callers (API + dashboard) already
+# constrain it; this is the defense-in-depth backstop at the query layer.
+_TOPIC_FIELDS = {"primary_topic", "topic_subfield", "topic_field", "topic_domain"}
+
 
 def top_topics(
     program: str | None = None,
@@ -451,16 +456,29 @@ def top_topics(
     limit: int = 20,
 ) -> pl.DataFrame:
     """Most common research topics/fields, optionally scoped to one program."""
+    if field_level not in _TOPIC_FIELDS:
+        raise ValueError(f"invalid field_level: {field_level!r}")
     yc = _year_clause(min_year, max_year)
-    prog_join = ", UNNEST(w.programs) AS pr(program)" if program else ""
-    prog_filter = f"AND pr.program = '{program.replace(chr(39), chr(39) * 2)}'" if program else ""
+    if program:
+        # ``program`` is bound as a parameter (injection-safe); the UNNEST joins
+        # the per-work program list so a work counts once per program.
+        return run_params(
+            f"""
+            SELECT w.{field_level} AS topic, count(DISTINCT w.work_id) AS publications,
+                   sum(w.cited_by_count)::BIGINT AS citations, round(avg(w.fwci), 2) AS mean_fwci
+            FROM works w, UNNEST(w.programs) AS pr(program)
+            WHERE {yc} AND w.{field_level} IS NOT NULL AND pr.program = ?
+            GROUP BY 1 ORDER BY publications DESC LIMIT {int(limit)}
+            """,
+            [program],
+        )
     return run_sql(
         f"""
         SELECT w.{field_level} AS topic, count(DISTINCT w.work_id) AS publications,
                sum(w.cited_by_count)::BIGINT AS citations, round(avg(w.fwci), 2) AS mean_fwci
-        FROM works w{prog_join}
-        WHERE {yc} AND w.{field_level} IS NOT NULL {prog_filter}
-        GROUP BY 1 ORDER BY publications DESC LIMIT {limit}
+        FROM works w
+        WHERE {yc} AND w.{field_level} IS NOT NULL
+        GROUP BY 1 ORDER BY publications DESC LIMIT {int(limit)}
         """
     )
 
@@ -634,6 +652,7 @@ def member_profile(
     ``by_year``, ``top_topics``, ``top_journals``, and ``top_coauthors`` (other
     cancer-center members on shared publications).
     """
+    member_id = int(member_id)  # interpolated below; coerce to int as a guard
     yc = _year_clause(min_year, max_year, col="mw.publication_year")
     member = run_sql(
         f"""
