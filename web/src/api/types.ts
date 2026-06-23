@@ -149,13 +149,6 @@ export interface ProgramCombination {
   count: number;
 }
 
-export interface TopicRow {
-  topic: string;
-  publications: number;
-  citations: number;
-  mean_fwci: number | null;
-}
-
 export interface MemberRow {
   member_id: number;
   name: string;
