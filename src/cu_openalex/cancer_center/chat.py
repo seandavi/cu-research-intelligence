@@ -22,7 +22,9 @@ import polars as pl
 
 from . import queries as q
 
-DEFAULT_MODEL = os.environ.get("CU_OPENALEX_CHAT_MODEL", "gemini-2.5-flash")
+# `or` (not a get-default): docker-compose always *sets* this var, passing an
+# empty string when unset, which would otherwise override the fallback with "".
+DEFAULT_MODEL = os.environ.get("CU_OPENALEX_CHAT_MODEL") or "gemini-2.5-flash"
 MAX_RESULT_ROWS = 200
 MAX_TOOL_ITERS = 6
 # Generous output budget — Gemini 2.5's "thinking" tokens draw from this, so a
