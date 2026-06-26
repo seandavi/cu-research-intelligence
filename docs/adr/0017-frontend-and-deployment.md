@@ -1,7 +1,13 @@
 # 0017. Frontend (React/Vite) and self-hosted deployment
 
-- Status: accepted
+- Status: accepted; **data delivery superseded by ADR-0023** (cdsci-lake)
 - Date: 2026-06-21
+
+> The React/nginx/Traefik topology is unchanged. What changed (ADR-0023): the
+> curated Parquet is no longer mounted read-only into the API container — the
+> serving DuckDB is **baked into the API image** at build time, so the running
+> container has no data mount and no runtime lake access. Data refresh = rebuild +
+> redeploy the image.
 
 ## Context
 

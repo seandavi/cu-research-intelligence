@@ -5,8 +5,9 @@ Production deploy of the cancer-center research-intelligence app via
 
 - **Live URL:** <https://insights.uccc.cancerdatasci.org>
 - **Stack:** `web` (nginx: SPA + reverse-proxy `/api`) → `api` (FastAPI + DuckDB,
-  internal-only). Curated Parquet mounted read-only; no database server
-  (ADR-0014, ADR-0017).
+  internal-only). The serving DuckDB (marts + FTS index) is baked into the API
+  image at build time — no data mount, no database server, no runtime lake access
+  (ADR-0014, ADR-0017, ADR-0023).
 
 ## Host conventions (this server)
 

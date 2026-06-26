@@ -4,9 +4,10 @@
 - Date: 2026-06-20
 
 > The RCR + DOI→PMID *crosswalks* described here are unchanged, but they are now
-> read from cdsci-lake's shared `icite` table at build time (ADR-0022/0023), not
-> fetched per-project from the NCBI/iCite APIs. The `cancer_center.enrich` module
-> and its `cancer_center/enrich/` caches were removed.
+> read (cohort-filtered) from cdsci-lake's shared `icite.metadata` table at build
+> time via the `cdsci.lake` accessor (ADR-0022/0023), not fetched per-project from
+> the NCBI/iCite APIs. The `cancer_center.enrich` module and its
+> `cancer_center/enrich/` caches were removed.
 
 ## Context
 
