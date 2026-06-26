@@ -1,163 +1,105 @@
-"""NIH RePORTER grants for the cancer-center cohort.
+"""NIH RePORTER grants for the cancer-center cohort, sourced from cdsci-lake.
 
-OpenAlex grant data is empty for our corpus (ADR-0010), so research funding is
-pulled directly from **NIH RePORTER** and matched to roster members by **PI
-name** (RePORTER has no ORCID).
+OpenAlex grant data is empty for our corpus (ADR-0010), so research funding comes
+from **NIH RePORTER** and is matched to roster members by **PI name** (RePORTER
+has no ORCID). The RePORTER projects now live in the shared lake
+(``lake.reporter_projects``, ADR-0022/0023) instead of being fetched per project
+from the RePORTER API — :func:`build_grants` reads them read-only.
 
-Fetching is **PI-centric, not organization-scoped**: we query RePORTER for grants
-where any *member's* name is a named PI, across all grantee organizations. A
-member can be a multi-PI on a grant administered at another institution (e.g. an
-MPI U-award led elsewhere), which an org-only ("University of Colorado Denver")
-fetch would miss while also mis-attributing same-surname locals. See ADR-0020.
+Matching is cohort-specific judgment and stays here (ADR-0022's resolution/
+attribution split): each project's PIs are matched to members by **exact** name
+(last + first), with RePORTER's per-person ``profile_id`` disambiguating common
+names. See ADR-0020 for the matching rationale.
 
-Two steps, mirroring the enrichment pattern (ADR-0018):
-
-* :func:`fetch_grants` — query the RePORTER API by **batched member PI names**
-  (``pi_names`` is a precise OR), paginating each batch, into a resumable cache
-  ``cancer_center/grants_raw.parquet``.
-* :func:`build_grants` — match each project's PIs to members by **exact** name
-  (last + first) and write ``member_grants.parquet``.
-
-Both are offline-friendly: the build matches the cached raw, no re-fetch.
+The lake stores PIs as the RePORTER bulk strings (``pi_names`` / ``pi_ids``,
+``;``-separated, contact PI flagged ``(contact)``); :func:`_parse_pis` rebuilds
+the structured ``{first_name,last_name,is_contact_pi,profile_id}`` list the
+matcher expects.
 """
 
 from __future__ import annotations
 
-import time
+import re
 
-import httpx
 import polars as pl
 
 from .paths import cc_target
 
-_API = "https://api.reporter.nih.gov/v2/projects/search"
-_PAGE = 500  # RePORTER max page size
-_NAME_BATCH = 25  # member names per pi_names query (keeps each search < 15k cap)
-_INCLUDE = [
-    "ApplId",
-    "ProjectNum",
-    "CoreProjectNum",
-    "FiscalYear",
-    "ActivityCode",
-    "AwardAmount",
-    "DirectCostAmt",
-    "AgencyIcAdmin",
-    "Organization",
-    "ProjectTitle",
-    "ProjectStartDate",
-    "ProjectEndDate",
-    "IsActive",
-    "PrincipalInvestigators",
-    "ContactPiName",
-]
-
-
-def _flatten(p: dict) -> dict:
-    """Project the RePORTER record to the columns we store."""
-    pis = p.get("principal_investigators") or []
-    agency = p.get("agency_ic_admin") or {}
-    org = p.get("organization") or {}
-    return {
-        "appl_id": p.get("appl_id"),
-        "core_project_num": p.get("core_project_num"),
-        "project_num": p.get("project_num"),
-        "fiscal_year": p.get("fiscal_year"),
-        "activity_code": p.get("activity_code"),
-        "agency_ic": agency.get("abbreviation"),
-        "award_amount": p.get("award_amount"),
-        "direct_cost_amt": p.get("direct_cost_amt"),
-        "is_active": p.get("is_active"),
-        "project_title": p.get("project_title"),
-        "project_start_date": p.get("project_start_date"),
-        "project_end_date": p.get("project_end_date"),
-        "org_name": org.get("org_name"),
-        "contact_pi_name": p.get("contact_pi_name"),
-        # PIs as a list of {first,last,is_contact,profile_id} for name matching.
-        "pis": [
-            {
-                "first_name": pi.get("first_name") or "",
-                "last_name": pi.get("last_name") or "",
-                "is_contact_pi": bool(pi.get("is_contact_pi")),
-                "profile_id": pi.get("profile_id"),
-            }
-            for pi in pis
-        ],
-    }
-
-
-def _member_pi_names(members: pl.DataFrame | None) -> list[dict]:
-    """Distinct ``{last_name, first_name}`` for roster members (for pi_names)."""
-    from .members import load_members
-
-    m = load_members() if members is None else members
-    names = (
-        m.select(
-            pl.col("Last_Name").str.strip_chars().alias("last_name"),
-            pl.col("First_Name").str.strip_chars().alias("first_name"),
-        )
-        .filter((pl.col("last_name") != "") & (pl.col("first_name") != ""))
-        .unique()
+_CONTACT = re.compile(r"\(contact\)", re.IGNORECASE)
+_PIS_DTYPE = pl.List(
+    pl.Struct(
+        {
+            "first_name": pl.Utf8,
+            "last_name": pl.Utf8,
+            "is_contact_pi": pl.Boolean,
+            "profile_id": pl.Utf8,
+        }
     )
-    return names.to_dicts()
+)
 
 
-def fetch_grants(
-    members: pl.DataFrame | None = None, sleep: float = 0.5
-) -> pl.DataFrame:
-    """Fetch RePORTER projects where a member is a named PI; cache and return.
+def _parse_pis(pi_names: str | None, pi_ids: str | None) -> list[dict]:
+    """Parse RePORTER ``pi_names`` / ``pi_ids`` strings into structured PIs.
 
-    Queries ``pi_names`` in batches (a precise OR over member names), across all
-    grantee organizations. One row per application (year-specific award). The
-    cache is replaced wholesale (the name set is the query), then deduped.
+    ``pi_names`` is ``"LAST, FIRST MIDDLE (contact);LAST2, FIRST2"``; ``pi_ids``
+    is the positionally-aligned ``"1234 (contact);5678"``. Returns one dict per
+    PI with the first given name only (middle dropped, matching the roster).
     """
-    from pathlib import Path
-
-    pi_names = _member_pi_names(members)
-    rows: list[dict] = []
-    with httpx.Client(timeout=60) as client:
-        for i in range(0, len(pi_names), _NAME_BATCH):
-            batch = pi_names[i : i + _NAME_BATCH]
-            offset = 0
-            while True:
-                body = {
-                    "criteria": {"pi_names": batch},
-                    "include_fields": _INCLUDE,
-                    "limit": _PAGE,
-                    "offset": offset,
-                }
-                try:
-                    resp = client.post(_API, json=body)
-                    resp.raise_for_status()
-                    payload = resp.json()
-                except (httpx.HTTPError, ValueError):
-                    break  # skip this page; resumable next run
-                results = payload.get("results", [])
-                rows.extend(_flatten(p) for p in results)
-                total = payload.get("meta", {}).get("total", 0)
-                offset += _PAGE
-                time.sleep(sleep)
-                if offset >= total or not results:
-                    break
-
-    out = pl.DataFrame(rows) if rows else pl.DataFrame()
-    if out.height:
-        out = out.unique(subset=["appl_id"], keep="last")
-        cache = cc_target("grants_raw")
-        Path(cache).parent.mkdir(parents=True, exist_ok=True)
-        out.write_parquet(cache)
+    names = (pi_names or "").split(";")
+    ids = (pi_ids or "").split(";")
+    out: list[dict] = []
+    for idx, raw in enumerate(names):
+        is_contact = bool(_CONTACT.search(raw))
+        name = _CONTACT.sub("", raw).strip()
+        if not name:
+            continue
+        last, _, first = name.partition(",")
+        first = first.strip().split(" ")[0] if first.strip() else ""
+        profile_id = None
+        if idx < len(ids):
+            profile_id = _CONTACT.sub("", ids[idx]).strip() or None
+        out.append(
+            {
+                "first_name": first,
+                "last_name": last.strip(),
+                "is_contact_pi": is_contact,
+                "profile_id": profile_id,
+            }
+        )
     return out
 
 
-def grants_cache() -> pl.DataFrame | None:
-    """The cached raw grants frame, or None if not fetched."""
-    from pathlib import Path
+def _load_lake_projects() -> pl.DataFrame:
+    """Read RePORTER projects from cdsci-lake, with structured PIs reconstructed."""
+    from ..lake import LAKE_ALIAS, attach_lake
+    from ..storage import duckdb_connect
 
-    p = cc_target("grants_raw")
-    return pl.read_parquet(p) if Path(p).exists() else None
+    with duckdb_connect(database=":memory:") as con:
+        attach_lake(con)
+        raw = con.execute(
+            f"""
+            SELECT appl_id, core_project_num, project_num, fiscal_year,
+                   activity_code, admin_ic AS agency_ic,
+                   total_cost AS award_amount, direct_cost AS direct_cost_amt,
+                   project_title,
+                   project_start AS project_start_date,
+                   project_end AS project_end_date,
+                   org_name, pi_names, pi_ids,
+                   (TRY_CAST(project_end AS DATE) >= current_date) AS is_active
+            FROM {LAKE_ALIAS}.reporter_projects
+            """
+        ).pl()
+    return raw.with_columns(
+        pl.struct(["pi_names", "pi_ids"])
+        .map_elements(
+            lambda s: _parse_pis(s["pi_names"], s["pi_ids"]), return_dtype=_PIS_DTYPE
+        )
+        .alias("pis")
+    )
 
 
 def build_grants() -> dict[str, str]:
-    """Match cached grants to roster members by **exact** PI name.
+    """Match lake RePORTER projects to roster members by **exact** PI name.
 
     Writes ``member_grants.parquet`` — one row per (member, grant-year award)
     where a principal investigator's name matches the member on **last + full
@@ -168,10 +110,11 @@ def build_grants() -> dict[str, str]:
     """
     from .members import load_members, normalize_name
 
-    raw = grants_cache()
-    if raw is None or raw.height == 0:
+    raw = _load_lake_projects()
+    if raw.height == 0:
         raise FileNotFoundError(
-            "No grants cache. Run `python -m cu_openalex.cancer_center.reporter`."
+            "No RePORTER projects in cdsci-lake (lake.reporter_projects is empty). "
+            "Load them into the lake first (ADR-0022)."
         )
 
     members = load_members().select(
@@ -247,17 +190,13 @@ def build_grants() -> dict[str, str]:
     )
     path = cc_target("member_grants")
     member_grants.write_parquet(path)
-    return {"member_grants": path, "grants_raw": cc_target("grants_raw")}
+    return {"member_grants": path}
 
 
 def main() -> None:
-    """CLI: fetch members' NIH grants from RePORTER, then match to members."""
-    df = fetch_grants()
-    print(f"  grants_raw  -> {df.height} awards cached")
+    """CLI: match cdsci-lake's NIH RePORTER projects to members."""
     paths = build_grants()
-    import polars as _pl
-
-    mg = _pl.read_parquet(paths["member_grants"])
+    mg = pl.read_parquet(paths["member_grants"])
     print(
         f"  member_grants -> {mg.height} member×award matches "
         f"({mg['member_id'].n_unique()} members, "

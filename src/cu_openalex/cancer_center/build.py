@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import polars as pl
 
+from ..lake import LAKE_ALIAS, attach_lake
 from ..storage import duckdb_connect
 from .members import load_members
 from .paths import cc_target
@@ -122,26 +123,29 @@ def _build_institutions(con) -> None:
 def _register_enrichment(con) -> None:
     """Register DOI→PMID and PMID→RCR crosswalks as ``doi_pmid`` / ``rcr_cw``.
 
-    Both come from :mod:`enrich` (NCBI ID Converter + iCite). When a crosswalk
-    hasn't been fetched yet, an empty table is registered so the build still
-    runs (no backfill / no RCR) — enrichment is an optional, additive layer.
+    Both derive from cdsci-lake's ``icite`` table (ADR-0022/0023): iCite carries
+    PMID, DOI, and RCR together, so the DOI→PMID backfill and the RCR metric come
+    from one shared, versioned source instead of per-project NCBI/iCite API calls.
+    The lake is attached read-only by the caller. If iCite hasn't been loaded yet
+    the crosswalks are simply empty (no backfill / no RCR) — enrichment stays an
+    optional, additive layer.
     """
-    from .enrich import doi_pmid_crosswalk, rcr_crosswalk
-
-    dp = doi_pmid_crosswalk()
-    con.execute("CREATE TABLE doi_pmid (doi VARCHAR, pmid VARCHAR)")
-    if dp is not None and dp.height:
-        con.register("_dp", dp.to_arrow())
-        con.execute("INSERT INTO doi_pmid SELECT doi, pmid FROM _dp")
-
-    rc = rcr_crosswalk()
     con.execute(
-        "CREATE TABLE rcr_cw "
-        "(pmid VARCHAR, rcr DOUBLE, nih_percentile DOUBLE, citation_count BIGINT)"
+        f"""
+        CREATE TABLE doi_pmid AS
+        SELECT lower(doi) AS doi, CAST(pmid AS VARCHAR) AS pmid
+        FROM {LAKE_ALIAS}.icite
+        WHERE doi IS NOT NULL AND pmid IS NOT NULL
+        """
     )
-    if rc is not None and rc.height:
-        con.register("_rc", rc.to_arrow())
-        con.execute("INSERT INTO rcr_cw SELECT pmid, rcr, nih_percentile, citation_count FROM _rc")
+    con.execute(
+        f"""
+        CREATE TABLE rcr_cw AS
+        SELECT CAST(pmid AS VARCHAR) AS pmid, rcr, nih_percentile, citation_count
+        FROM {LAKE_ALIAS}.icite
+        WHERE pmid IS NOT NULL
+        """
+    )
 
 
 def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]:
@@ -162,6 +166,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
     crosswalk.write_parquet(members_path)
 
     with duckdb_connect(database=":memory:") as con:
+        attach_lake(con)  # read-only; supplies the iCite enrichment crosswalks
         con.register("amap", amap.to_arrow())
         # Drop conflated author_ids (implausible works_count) from attribution.
         con.execute(
@@ -365,10 +370,20 @@ def main() -> None:
         default="low",
         help="Lowest match confidence to attribute works (default: low).",
     )
+    parser.add_argument(
+        "--no-bake",
+        action="store_true",
+        help="Skip baking serving.duckdb (ADR-0023). Re-run `-m cancer_center.bake` "
+        "after building grants so the serving DB includes member_grants.",
+    )
     args = parser.parse_args()
     paths = build_cancer_center_tables(min_confidence=args.min_confidence)
     for name, path in paths.items():
         print(f"  {name:14} -> {path}")
+    if not args.no_bake:
+        from .bake import bake_serving_db
+
+        print(f"  {'serving.duckdb':14} -> {bake_serving_db()}")
 
 
 if __name__ == "__main__":

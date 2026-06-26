@@ -43,6 +43,17 @@ class Settings(BaseSettings):
     r2_secret_access_key: str | None = None
     r2_region: str = "auto"
 
+    # --- cdsci-lake: shared DuckLake substrate (ADR-0022 / ADR-0023) ---
+    # The offline build attaches this read-only to source canonical facts (iCite
+    # RCR + DOI↔PMID, NIH RePORTER projects) instead of per-project API calls.
+    # The serving container never touches it. ``lake_uri`` is a DuckLake target
+    # (``ducklake:<catalog>``; the catalog may itself reference R2-hosted data).
+    lake_uri: str = "ducklake:data/lake/catalog.ducklake"
+    # Override a catalog's stored (absolute) data path — only needed for local
+    # dev when the catalog was created on another machine. Unset in production,
+    # where the catalog's data path is self-consistent.
+    lake_data_path: str | None = None
+
     # --- API client politeness / throughput ---
     requests_per_second: float = Field(default=8.0, gt=0)
     max_concurrency: int = Field(default=6, ge=1)

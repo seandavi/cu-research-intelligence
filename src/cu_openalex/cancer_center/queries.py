@@ -17,7 +17,7 @@ from pathlib import Path
 import duckdb
 import polars as pl
 
-from .paths import cc_target
+from .paths import cc_target, serving_db_path
 from .programs import current_programs_sql
 
 # A single in-memory DuckDB connection is shared across calls. DuckDB connections
@@ -39,7 +39,20 @@ INDEXING_LAG_FROM = 2025
 
 @functools.lru_cache(maxsize=1)
 def connect() -> duckdb.DuckDBPyConnection:
-    """Open a read-only in-memory DuckDB with the cc tables registered as views."""
+    """Open the read-only serving DuckDB; fall back to views over curated Parquet.
+
+    Production serves from the baked ``serving.duckdb`` (ADR-0023) — one immutable
+    file with the marts and a materialized FTS index. When it hasn't been baked
+    (dev, fresh checkout), fall back to registering the curated Parquet marts as
+    views so the API/dashboard still run straight off a ``build``.
+    """
+    db = serving_db_path()
+    if db.exists():
+        con = duckdb.connect(str(db), read_only=True)
+        # The baked BM25 index needs the FTS extension loaded on this connection.
+        con.execute("INSTALL fts; LOAD fts;")
+        return con
+
     con = duckdb.connect(":memory:")
     for name in ("members", "works", "member_works"):
         path = cc_target(name)

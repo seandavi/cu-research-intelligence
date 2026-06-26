@@ -1,7 +1,16 @@
 # 0023. Backend sourced from cdsci-lake, not live APIs
 
-- Status: proposed (draft)
+- Status: accepted
 - Date: 2026-06-26
+
+> **Implemented (branch `feat/cdsci-lake-backend`):** the iCite (RCR + DOI↔PMID)
+> and NIH RePORTER enrichment now read from cdsci-lake instead of per-project APIs
+> — exactly the corpora already loaded into the lake (ADR-0022 steps 1–2); the
+> per-project `enrich.py` was deleted and `reporter.py` reads `lake.reporter_projects`.
+> The serving layer reads a baked read-only `serving.duckdb` (marts + FTS index),
+> baked into the API image with no runtime mount or lake access. **OpenAlex works/
+> authors/dims remain on the snapshot pipeline (ADR-0008)** — landing them in the
+> lake is ADR-0022 step 3, deferred per the tiering decision below.
 
 ## Context
 

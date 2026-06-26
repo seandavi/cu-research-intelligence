@@ -16,6 +16,7 @@ import pytest
 from cu_openalex.cancer_center.chat import UnsafeSQLError, run_safe_sql
 from cu_openalex.cancer_center.members import normalize_name, parse_orcid
 from cu_openalex.cancer_center.paths import cc_target
+from cu_openalex.cancer_center.reporter import _parse_pis
 
 _HAS_CURATED = Path(cc_target("works")).exists()
 
@@ -35,6 +36,29 @@ def test_normalize_name_accents_and_punct():
     assert normalize_name("Peña") == "pena"
     assert normalize_name("  Smith  ") == "smith"
     assert normalize_name(None) == ""
+
+
+def test_parse_pis_from_lake_strings():
+    """RePORTER bulk PI strings (lake) parse into structured PIs for matching."""
+    # Multi-PI: ';'-separated, contact flagged, profile_ids positionally aligned;
+    # the first given name is kept (middle dropped to match the roster).
+    pis = _parse_pis(
+        "CHRISTENSEN, BROCK CLARKE;KELSEY, KARL TIMOTHY (contact)",
+        "10406548;1934274 (contact)",
+    )
+    assert pis == [
+        {"first_name": "BROCK", "last_name": "CHRISTENSEN",
+         "is_contact_pi": False, "profile_id": "10406548"},
+        {"first_name": "KARL", "last_name": "KELSEY",
+         "is_contact_pi": True, "profile_id": "1934274"},
+    ]
+    # Single contact PI.
+    assert _parse_pis("WOZNIAK, DANIEL J (contact)", "1876395 (contact)") == [
+        {"first_name": "DANIEL", "last_name": "WOZNIAK",
+         "is_contact_pi": True, "profile_id": "1876395"}
+    ]
+    # Missing data → empty list (no crash).
+    assert _parse_pis(None, None) == []
 
 
 def _classify(rows):

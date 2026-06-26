@@ -45,15 +45,21 @@ curl -s -H 'accept: application/dns-json' \
 
 ## Deploy
 
-The curated tables must already exist on the host under `data/cancer_center/`
-(built with `uv run python -m cu_openalex.cancer_center.build`; mounted read-only).
+The baked serving database must exist on the host at
+`data/cancer_center/serving.duckdb` before building the API image — it is **baked
+into the image** at build time, not mounted (ADR-0023). Build it from cdsci-lake:
 
 ```bash
+uv run python -m cu_openalex.cancer_center.reporter   # optional: NIH grants mart
+uv run python -m cu_openalex.cancer_center.build      # writes marts + bakes serving.duckdb
 docker compose up -d --build
 ```
 
-That builds both images and starts the stack. The router is picked up from the
-`web` service's Traefik labels — no Traefik restart needed.
+`build` sources its enrichment (iCite RCR + DOI→PMID) from cdsci-lake and bakes
+`serving.duckdb` automatically. Run `reporter` **before** `build` so the grants
+mart is included in the bake (or run `python -m cu_openalex.cancer_center.bake`
+again afterward). That builds both images and starts the stack. The router is
+picked up from the `web` service's Traefik labels — no Traefik restart needed.
 
 ### First-time TLS issuance
 
@@ -78,13 +84,19 @@ echo | openssl s_client -connect 140.226.4.71:443 \
 
 ## Operations
 
-**Refresh the data.** Rebuild the curated tables on the host, then restart the
-API (the mount is read-only; nginx/SPA are unaffected):
+**Refresh the data.** The serving DB is baked into the image, so refreshing data
+means rebuilding + redeploying the API image (not restarting it). Rebuild the
+marts/serving DB on the host, then rebuild the image:
 
 ```bash
-uv run python -m cu_openalex.cancer_center.build
-docker compose restart api
+uv run python -m cu_openalex.cancer_center.build   # re-bakes serving.duckdb
+docker compose up -d --build api
 ```
+
+Each deployed image is thus a reproducible, pinned snapshot of the data. (If you
+ever need to refresh without rebuilding the image, mount the file read-only —
+`./data/cancer_center/serving.duckdb:/app/data/cancer_center/serving.duckdb:ro` —
+the fallback noted in ADR-0023.)
 
 **Enable the NL→SQL chat (`/api/chat`).** Provide a server-side Gemini key — end
 users never supply one. Create `.env` (gitignored) next to the compose file:
