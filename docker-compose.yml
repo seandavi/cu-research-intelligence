@@ -1,10 +1,12 @@
 # Cancer-center research-intelligence API, fronted by an existing Traefik.
 #
 # Assumes Traefik is already running and attached to an external Docker network
-# (named `traefik` here — change to match yours). The curated Parquet tables are
-# mounted read-only; rebuild them on the host with
+# (named `traefik` here — change to match yours). The serving DuckDB (marts + FTS
+# index) is baked into the API image at build time (ADR-0023), so there is no data
+# mount and no runtime lake access. Rebuild it on the host before building:
 #   uv run python -m cu_openalex.cancer_center.build
-# No database server: the API reads the Parquet through DuckDB in-process.
+# Refresh the data by rebuilding + redeploying (`docker compose up -d --build`).
+# No database server: the API reads the baked DuckDB in-process, read-only.
 #
 #   docker compose up -d --build
 
@@ -20,8 +22,7 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       # Optional: override the chat model (default gemini-2.5-flash).
       CU_OPENALEX_CHAT_MODEL: ${CU_OPENALEX_CHAT_MODEL:-}
-    volumes:
-      - ./data/cancer_center:/app/data/cancer_center:ro
+    # No volume mount: the serving DuckDB is baked into the image (ADR-0023).
     networks:
       - internal
 

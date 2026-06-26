@@ -122,25 +122,37 @@ def _build_institutions(con) -> None:
 def _register_enrichment(con) -> None:
     """Register DOI→PMID and PMID→RCR crosswalks as ``doi_pmid`` / ``rcr_cw``.
 
-    Both come from :mod:`enrich` (NCBI ID Converter + iCite). When a crosswalk
-    hasn't been fetched yet, an empty table is registered so the build still
-    runs (no backfill / no RCR) — enrichment is an optional, additive layer.
+    Both derive from cdsci-lake's ``icite.metadata`` table (ADR-0022/0023): iCite
+    carries PMID, DOI, and RCR together, so the DOI→PMID backfill and the RCR
+    metric come from one shared, versioned source instead of per-project NCBI/iCite
+    API calls. Only the **cohort slice** is pulled (the lake's iCite is ~40M rows),
+    keyed by the cohort works' DOIs/PMIDs — so ``cc_workids`` must already exist.
+    Empty crosswalks (iCite not loaded) leave RCR/backfill null — enrichment stays
+    an optional, additive layer.
     """
-    from .enrich import doi_pmid_crosswalk, rcr_crosswalk
+    from ..lake import icite_crosswalks
 
-    dp = doi_pmid_crosswalk()
+    keys = con.execute(
+        f"""
+        SELECT regexp_replace(lower(w.doi), '^https?://(dx\\.)?doi\\.org/', '') AS doi,
+               NULLIF(w.pmid, '') AS pmid
+        FROM '{_WORKS_GLOB}' w JOIN cc_workids c USING (work_id)
+        """
+    ).pl()
+    doi_pmid, rcr = icite_crosswalks(
+        keys["doi"].drop_nulls().to_list(), keys["pmid"].drop_nulls().to_list()
+    )
+
     con.execute("CREATE TABLE doi_pmid (doi VARCHAR, pmid VARCHAR)")
-    if dp is not None and dp.height:
-        con.register("_dp", dp.to_arrow())
+    if doi_pmid.height:
+        con.register("_dp", doi_pmid.to_arrow())
         con.execute("INSERT INTO doi_pmid SELECT doi, pmid FROM _dp")
-
-    rc = rcr_crosswalk()
     con.execute(
         "CREATE TABLE rcr_cw "
         "(pmid VARCHAR, rcr DOUBLE, nih_percentile DOUBLE, citation_count BIGINT)"
     )
-    if rc is not None and rc.height:
-        con.register("_rc", rc.to_arrow())
+    if rcr.height:
+        con.register("_rc", rcr.to_arrow())
         con.execute("INSERT INTO rcr_cw SELECT pmid, rcr, nih_percentile, citation_count FROM _rc")
 
 
@@ -197,12 +209,13 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
         pub_types = publication_types_sql()
         min_year, max_year = MIN_VALID_YEAR, MAX_VALID_YEAR
 
-        _register_enrichment(con)
-
         # Per-work metadata shared by both output tables: backfilled PMID,
         # meeting-abstract flag, the publication flag, and iCite RCR. Restricted
         # to cc works so the raw-JSON issue extraction stays cheap.
         con.execute("CREATE TABLE cc_workids AS SELECT DISTINCT work_id FROM work_author")
+
+        # iCite crosswalks from cdsci-lake, keyed by the cohort works above.
+        _register_enrichment(con)
         con.execute(
             f"""
             CREATE TABLE issue_lookup AS
@@ -365,10 +378,20 @@ def main() -> None:
         default="low",
         help="Lowest match confidence to attribute works (default: low).",
     )
+    parser.add_argument(
+        "--no-bake",
+        action="store_true",
+        help="Skip baking serving.duckdb (ADR-0023). Re-run `-m cancer_center.bake` "
+        "after building grants so the serving DB includes member_grants.",
+    )
     args = parser.parse_args()
     paths = build_cancer_center_tables(min_confidence=args.min_confidence)
     for name, path in paths.items():
         print(f"  {name:14} -> {path}")
+    if not args.no_bake:
+        from .bake import bake_serving_db
+
+        print(f"  {'serving.duckdb':14} -> {bake_serving_db()}")
 
 
 if __name__ == "__main__":

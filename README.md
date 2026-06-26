@@ -182,15 +182,18 @@ absolute counts, which undercount for the most recent years (OpenAlex indexing
 lag). The dashboard surfaces these caveats inline.
 
 **Impact metrics**: field-weighted citation impact (FWCI) ships in the curated
-works; NIH iCite **RCR** and a DOI→PMID backfill are added by
-`cancer_center.enrich` (resumable caches under `data/cancer_center/enrich/`) and
-merged on the next `build`. RCR (1.0 = median NIH-funded paper) is the most
-NCI-native metric and is the dashboard's headline impact figure.
+works; NIH iCite **RCR** and a DOI→PMID backfill are sourced from cdsci-lake's
+`icite.metadata` table at `build` time via the `cdsci.lake` accessor (ADR-0022/
+0023) — one shared, versioned source instead of per-project API calls. RCR (1.0 =
+median NIH-funded paper) is the most NCI-native metric and is the dashboard's
+headline impact figure.
 
 ### Headless API (FastAPI + DuckDB)
 
 The same query layer is exposed as a JSON API for a custom frontend — no
-database server (DuckDB reads the curated Parquet in-process):
+database server. The API reads a single baked **`serving.duckdb`** (the marts +
+a materialized FTS index) in-process, read-only (ADR-0023); in dev it falls back
+to views over the curated Parquet:
 
 ```bash
 uv run --extra api uvicorn cu_openalex.cancer_center.api:app --reload

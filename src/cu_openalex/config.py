@@ -43,6 +43,10 @@ class Settings(BaseSettings):
     r2_secret_access_key: str | None = None
     r2_region: str = "auto"
 
+    # cdsci-lake (the shared DuckLake substrate, ADR-0022/0023) is reached through
+    # the `cdsci.lake` accessor, which owns its own settings (same CU_OPENALEX_
+    # .env, e.g. CU_OPENALEX_LAKE_BACKEND=postgres). No lake config lives here.
+
     # --- API client politeness / throughput ---
     requests_per_second: float = Field(default=8.0, gt=0)
     max_concurrency: int = Field(default=6, ge=1)

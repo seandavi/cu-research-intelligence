@@ -161,13 +161,20 @@ def read_polars(*parts: str, settings: Settings | None = None) -> pl.DataFrame:
     return pl.read_parquet(target, storage_options=polars_storage_options(settings))
 
 
-def state_db_path(settings: Settings | None = None) -> Path:
-    """Local path to the DuckDB state database (always local; see module docs)."""
+def local_data_root(settings: Settings | None = None) -> Path:
+    """Local data root: the ``file://`` landing pad, or ``./data`` when remote.
+
+    Used for artifacts that must live on local disk regardless of where Parquet
+    lands — the DuckDB state DB and the baked serving DB (ADR-0023). A remote
+    (R2) landing pad keeps these under ``./data`` locally (see module docs)."""
     s = settings or get_settings()
     base = s.storage_base_uri.rstrip("/")
-    # Remote landing pad → keep state under ./data locally (see module docs).
-    root = _local_root(base) if base.startswith("file://") else Path(os.path.abspath("./data"))
-    path = root / "state" / "state.duckdb"
+    return _local_root(base) if base.startswith("file://") else Path(os.path.abspath("./data"))
+
+
+def state_db_path(settings: Settings | None = None) -> Path:
+    """Local path to the DuckDB state database (always local; see module docs)."""
+    path = local_data_root(settings) / "state" / "state.duckdb"
     path.parent.mkdir(parents=True, exist_ok=True)
     return path
 

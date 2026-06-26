@@ -1,7 +1,14 @@
 # 0020. NIH grants from RePORTER, matched by PI name
 
-- Status: accepted
+- Status: accepted; **data source superseded by ADR-0023** (cdsci-lake)
 - Date: 2026-06-21
+
+> The PI-name matching + `profile_id` disambiguation described here is unchanged
+> (it stays cohort-specific judgment), but the RePORTER projects are now read from
+> cdsci-lake's `reporter_projects` table at build time (ADR-0022/0023), not fetched
+> from the RePORTER API. `reporter.py`'s `fetch_grants`/`grants_raw.parquet` cache
+> were removed; `build_grants` reconstructs structured PIs from the lake's
+> `pi_names`/`pi_ids` strings.
 
 ## Context
 

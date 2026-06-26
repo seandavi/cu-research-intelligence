@@ -1,6 +1,8 @@
 .git
 .venv
 data
+# …except the baked serving DB, which the API image bakes in (ADR-0023).
+!data/cancer_center/serving.duckdb
 logs
 docs
 tests

@@ -1,7 +1,12 @@
 # 0018. External enrichment: iCite RCR and DOI→PMID backfill
 
-- Status: accepted
+- Status: accepted; **data source superseded by ADR-0023** (cdsci-lake)
 - Date: 2026-06-20
+
+> The RCR + DOI→PMID *crosswalks* described here are unchanged, but they are now
+> read from cdsci-lake's shared `icite` table at build time (ADR-0022/0023), not
+> fetched per-project from the NCBI/iCite APIs. The `cancer_center.enrich` module
+> and its `cancer_center/enrich/` caches were removed.
 
 ## Context
 
