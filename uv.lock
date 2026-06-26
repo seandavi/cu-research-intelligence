@@ -355,6 +355,41 @@ wheels = [
 ]
 
 [[package]]
+name = "cdsci-lake"
+version = "0.1.0"
+source = { directory = "../cdsci-lake" }
+dependencies = [
+    { name = "duckdb" },
+    { name = "httpx" },
+    { name = "loguru" },
+    { name = "pydantic-settings" },
+    { name = "tenacity" },
+    { name = "typer" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "duckdb", specifier = ">=1.5.3" },
+    { name = "httpx", specifier = ">=0.28.1" },
+    { name = "httpx", marker = "extra == 'ingest'", specifier = ">=0.28.1" },
+    { name = "loguru", specifier = ">=0.7.3" },
+    { name = "pydantic-settings", specifier = ">=2.14.1" },
+    { name = "pytz", marker = "extra == 'ingest'", specifier = ">=2025.1" },
+    { name = "tenacity", specifier = ">=9.1.4" },
+    { name = "tenacity", marker = "extra == 'ingest'", specifier = ">=9.1.4" },
+    { name = "typer", specifier = ">=0.26.7" },
+    { name = "typer", marker = "extra == 'ingest'", specifier = ">=0.15.0" },
+]
+provides-extras = ["ingest"]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "pytest-asyncio", specifier = ">=1.4.0" },
+    { name = "ruff", specifier = ">=0.15.15" },
+]
+
+[[package]]
 name = "certifi"
 version = "2026.5.20"
 source = { registry = "https://pypi.org/simple" }
@@ -598,6 +633,9 @@ dashboard = [
     { name = "pyvis" },
     { name = "streamlit" },
 ]
+lake = [
+    { name = "cdsci-lake" },
+]
 
 [package.dev-dependencies]
 dev = [
@@ -609,6 +647,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "cdsci-lake", marker = "extra == 'lake'", directory = "../cdsci-lake" },
     { name = "duckdb", specifier = ">=1.5.3" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.136.3" },
     { name = "fastexcel", specifier = ">=0.20.2" },
@@ -631,7 +670,7 @@ requires-dist = [
     { name = "universal-pathlib", specifier = ">=0.3.10" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'api'", specifier = ">=0.48.0" },
 ]
-provides-extras = ["dashboard", "api"]
+provides-extras = ["dashboard", "api", "lake"]
 
 [package.metadata.requires-dev]
 dev = [
@@ -1319,6 +1358,19 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/19/74/a633ee74eb36c44aa6d1095e7cc5569bebf04342ee146178e2d36600708b/jsonschema_specifications-2025.9.1.tar.gz", hash = "sha256:b540987f239e745613c7a9176f3edb72b832a4ac465cf02712288397832b5e8d", size = 32855, upload-time = "2025-09-08T01:34:59.186Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/41/45/1a4ed80516f02155c51f51e8cedb3c1902296743db0bbc66608a0db2814f/jsonschema_specifications-2025.9.1-py3-none-any.whl", hash = "sha256:98802fee3a11ee76ecaca44429fda8a41bff98b00a0f2838151b113f210cc6fe", size = 18437, upload-time = "2025-09-08T01:34:57.871Z" },
+]
+
+[[package]]
+name = "loguru"
+version = "0.7.3"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "colorama", marker = "sys_platform == 'win32'" },
+    { name = "win32-setctime", marker = "sys_platform == 'win32'" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3a/05/a1dae3dffd1116099471c643b8924f5aa6524411dc6c63fdae648c4f1aca/loguru-0.7.3.tar.gz", hash = "sha256:19480589e77d47b8d85b2c827ad95d49bf31b0dcde16593892eb51dd18706eb6", size = 63559, upload-time = "2024-12-06T11:20:56.608Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0c/29/0348de65b8cc732daa3e33e67806420b2ae89bdce2b04af740289c5c6c8c/loguru-0.7.3-py3-none-any.whl", hash = "sha256:31a33c10c8e1e10422bfd431aeb5d351c7cf7fa671e3c4df004162264b28220c", size = 61595, upload-time = "2024-12-06T11:20:54.538Z" },
 ]
 
 [[package]]
@@ -2990,7 +3042,7 @@ wheels = [
 
 [[package]]
 name = "typer"
-version = "0.26.6"
+version = "0.26.8"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "annotated-doc" },
@@ -2998,9 +3050,9 @@ dependencies = [
     { name = "rich" },
     { name = "shellingham" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f4/8a/8dc5733b8939e7f1a71173091a6e27a1658345edbff548a0bf3f5bb26173/typer-0.26.6.tar.gz", hash = "sha256:cdbc160fe7e795b835fb6016419494a521a67bfb86b9476a1ccd0e7727d3ae5b", size = 201595, upload-time = "2026-06-02T13:47:50.536Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/7c/f7/68adc395201b20b872d68e975386832e8005ffeacedd43a1d837a32815be/typer-0.26.8.tar.gz", hash = "sha256:c244a6bd558886fe3f8780efb6bdd28bb9aff005a94eedebaa5cb32926fe2f7e", size = 202097, upload-time = "2026-06-26T09:22:45.705Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/30/c7/519138260db5e2fe03a509bf9e8ef6af9a514d3565c8fa74fc4fededbae1/typer-0.26.6-py3-none-any.whl", hash = "sha256:49f96d9ee5730cef607bbe155042f40b41fa4c0d0dec04990d580837493805be", size = 122464, upload-time = "2026-06-02T13:47:51.768Z" },
+    { url = "https://files.pythonhosted.org/packages/80/87/b9fd69c92c6102a066e1b86a35243f53e70bd4c709f2a26d9f4fee4f4dc0/typer-0.26.8-py3-none-any.whl", hash = "sha256:3512ca79ac5c11113414b36e80281b872884477722440691c89d1112e321a49c", size = 122564, upload-time = "2026-06-26T09:22:44.72Z" },
 ]
 
 [[package]]
@@ -3328,6 +3380,15 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/e0/82/b351bf95bd95efe13e215398bfa5627e84e32408ebdf8568a483d3f4d9aa/whenever-0.10.0-cp314-cp314t-win32.whl", hash = "sha256:743220a5fa5b4e60f64d2e8f29eba258d8703dace9b640f38eda4ccd13ac559e", size = 563834, upload-time = "2026-04-05T18:43:43.966Z" },
     { url = "https://files.pythonhosted.org/packages/53/43/62f04f661286ce2c93310fb0682c1c6665c9804567923861b2382676c91d/whenever-0.10.0-cp314-cp314t-win_amd64.whl", hash = "sha256:8f7482cc1b1d019fbcfad83b31f783b0eaf5390aada329f044dc04921bb5ea2b", size = 560313, upload-time = "2026-04-05T18:43:46.293Z" },
     { url = "https://files.pythonhosted.org/packages/ed/b5/38fba836844233b961a0026d96f39f893eab63757e7757fd1d16fb02aa80/whenever-0.10.0-py3-none-any.whl", hash = "sha256:70feda454af6b2c231abd428b9430cd75492a000ca1d1edc42976d6fea265eec", size = 119264, upload-time = "2026-04-05T18:43:48.077Z" },
+]
+
+[[package]]
+name = "win32-setctime"
+version = "1.2.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/b3/8f/705086c9d734d3b663af0e9bb3d4de6578d08f46b1b101c2442fd9aecaa2/win32_setctime-1.2.0.tar.gz", hash = "sha256:ae1fdf948f5640aae05c511ade119313fb6a30d7eabe25fef9764dca5873c4c0", size = 4867, upload-time = "2024-12-07T15:28:28.314Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/e1/07/c6fe3ad3e685340704d314d765b7912993bcb8dc198f0e7a89382d37974b/win32_setctime-1.2.0-py3-none-any.whl", hash = "sha256:95d644c4e708aba81dc3704a116d8cbc974d70b3bdb8be1d150e36be6e9d1390", size = 4083, upload-time = "2024-12-07T15:28:26.465Z" },
 ]
 
 [[package]]

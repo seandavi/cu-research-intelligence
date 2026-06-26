@@ -47,19 +47,25 @@ curl -s -H 'accept: application/dns-json' \
 
 The baked serving database must exist on the host at
 `data/cancer_center/serving.duckdb` before building the API image — it is **baked
-into the image** at build time, not mounted (ADR-0023). Build it from cdsci-lake:
+into the image** at build time, not mounted (ADR-0023). Build it from cdsci-lake
+using the `cdsci.lake` accessor (the `lake` extra) against the shared Postgres
+store (`CU_OPENALEX_LAKE_BACKEND=postgres`, secrets via Google Secret Manager):
 
 ```bash
-uv run python -m cu_openalex.cancer_center.reporter   # optional: NIH grants mart
-uv run python -m cu_openalex.cancer_center.build      # writes marts + bakes serving.duckdb
+gcloud auth login                                     # once: GSM secret access
+export CU_OPENALEX_LAKE_BACKEND=postgres              # or set it in .env
+uv run --extra lake python -m cu_openalex.cancer_center.reporter   # NIH grants mart
+uv run --extra lake python -m cu_openalex.cancer_center.build      # marts + bakes serving.duckdb
 docker compose up -d --build
 ```
 
-`build` sources its enrichment (iCite RCR + DOI→PMID) from cdsci-lake and bakes
+`build` sources its enrichment (iCite RCR + DOI→PMID) from the lake and bakes
 `serving.duckdb` automatically. Run `reporter` **before** `build` so the grants
 mart is included in the bake (or run `python -m cu_openalex.cancer_center.bake`
-again afterward). That builds both images and starts the stack. The router is
-picked up from the `web` service's Traefik labels — no Traefik restart needed.
+again afterward). The lake is only touched here, on the host — the API image
+installs only the `api` extra (no `cdsci-lake`) and runs fully offline. That
+builds both images and starts the stack; the router is picked up from the `web`
+service's Traefik labels — no Traefik restart needed.
 
 ### First-time TLS issuance
 
@@ -89,7 +95,8 @@ means rebuilding + redeploying the API image (not restarting it). Rebuild the
 marts/serving DB on the host, then rebuild the image:
 
 ```bash
-uv run python -m cu_openalex.cancer_center.build   # re-bakes serving.duckdb
+export CU_OPENALEX_LAKE_BACKEND=postgres
+uv run --extra lake python -m cu_openalex.cancer_center.build   # re-bakes serving.duckdb
 docker compose up -d --build api
 ```
 

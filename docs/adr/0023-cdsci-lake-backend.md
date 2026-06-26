@@ -4,13 +4,20 @@
 - Date: 2026-06-26
 
 > **Implemented (branch `feat/cdsci-lake-backend`):** the iCite (RCR + DOI↔PMID)
-> and NIH RePORTER enrichment now read from cdsci-lake instead of per-project APIs
-> — exactly the corpora already loaded into the lake (ADR-0022 steps 1–2); the
-> per-project `enrich.py` was deleted and `reporter.py` reads `lake.reporter_projects`.
-> The serving layer reads a baked read-only `serving.duckdb` (marts + FTS index),
-> baked into the API image with no runtime mount or lake access. **OpenAlex works/
-> authors/dims remain on the snapshot pipeline (ADR-0008)** — landing them in the
-> lake is ADR-0022 step 3, deferred per the tiering decision below.
+> and NIH RePORTER enrichment now read from cdsci-lake instead of per-project APIs.
+> The lake is reached through the sibling **`cdsci-lake` package's `lake_connect`
+> accessor** (a `lake` extra, build-time only), pointed at the **shared Postgres
+> catalog + R2 data** (`CU_OPENALEX_LAKE_BACKEND=postgres`, secrets via Google
+> Secret Manager). The shared tables are large (iCite ~40M rows, RePORTER ~2.9M),
+> so the build pulls only the **cohort slice**: `_register_enrichment` filters
+> `lake.icite.metadata` by the cohort works' DOIs/PMIDs, and `reporter.py` coarse-
+> filters `lake.reporter.projects` by roster surnames in-lake, then runs the exact
+> PI match locally. The per-project `enrich.py` was deleted. The serving layer
+> reads a baked read-only `serving.duckdb` (marts + FTS index) baked into the API
+> image — no runtime mount, no lake access; the image installs only the `api`
+> extra (never `cdsci-lake`). **OpenAlex works/authors/dims remain on the snapshot
+> pipeline (ADR-0008)** — the lake now has `openalex.*` tables too, but migrating
+> the works pipeline onto them is ADR-0022 step 3, deferred per the tiering below.
 
 ## Context
 
@@ -126,11 +133,12 @@ unaffected.
 
 ### 3. Locality: materialize into the container; no lake access at runtime
 
-The build (`cu_openalex.cancer_center.build`, run on the host/CI) is the **only**
-component that `ATTACH`es cdsci-lake — read-only, over R2 through the existing
-`storage.py` seam (ADR-0003). It produces `serving.duckdb`, which is **baked into
-the API image** at build time. The running container reads it in-process and
-never touches the network for data.
+The build/grants steps (`cancer_center.build` / `.reporter`, run on the host/CI)
+are the **only** components that open cdsci-lake — read-only, through the
+`cdsci.lake.lake_connect` accessor (Postgres catalog + R2 data). They produce
+`serving.duckdb`, which is **baked into the API image** at build time. The running
+container reads it in-process and never touches the network for data; the API
+image doesn't even install the `cdsci-lake` package.
 
 Why not query the lake remotely per request:
 

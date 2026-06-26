@@ -21,7 +21,6 @@ from __future__ import annotations
 
 import polars as pl
 
-from ..lake import LAKE_ALIAS, attach_lake
 from ..storage import duckdb_connect
 from .members import load_members
 from .paths import cc_target
@@ -123,29 +122,38 @@ def _build_institutions(con) -> None:
 def _register_enrichment(con) -> None:
     """Register DOI→PMID and PMID→RCR crosswalks as ``doi_pmid`` / ``rcr_cw``.
 
-    Both derive from cdsci-lake's ``icite`` table (ADR-0022/0023): iCite carries
-    PMID, DOI, and RCR together, so the DOI→PMID backfill and the RCR metric come
-    from one shared, versioned source instead of per-project NCBI/iCite API calls.
-    The lake is attached read-only by the caller. If iCite hasn't been loaded yet
-    the crosswalks are simply empty (no backfill / no RCR) — enrichment stays an
-    optional, additive layer.
+    Both derive from cdsci-lake's ``icite.metadata`` table (ADR-0022/0023): iCite
+    carries PMID, DOI, and RCR together, so the DOI→PMID backfill and the RCR
+    metric come from one shared, versioned source instead of per-project NCBI/iCite
+    API calls. Only the **cohort slice** is pulled (the lake's iCite is ~40M rows),
+    keyed by the cohort works' DOIs/PMIDs — so ``cc_workids`` must already exist.
+    Empty crosswalks (iCite not loaded) leave RCR/backfill null — enrichment stays
+    an optional, additive layer.
     """
-    con.execute(
+    from ..lake import icite_crosswalks
+
+    keys = con.execute(
         f"""
-        CREATE TABLE doi_pmid AS
-        SELECT lower(doi) AS doi, CAST(pmid AS VARCHAR) AS pmid
-        FROM {LAKE_ALIAS}.icite
-        WHERE doi IS NOT NULL AND pmid IS NOT NULL
+        SELECT regexp_replace(lower(w.doi), '^https?://(dx\\.)?doi\\.org/', '') AS doi,
+               NULLIF(w.pmid, '') AS pmid
+        FROM '{_WORKS_GLOB}' w JOIN cc_workids c USING (work_id)
         """
+    ).pl()
+    doi_pmid, rcr = icite_crosswalks(
+        keys["doi"].drop_nulls().to_list(), keys["pmid"].drop_nulls().to_list()
     )
+
+    con.execute("CREATE TABLE doi_pmid (doi VARCHAR, pmid VARCHAR)")
+    if doi_pmid.height:
+        con.register("_dp", doi_pmid.to_arrow())
+        con.execute("INSERT INTO doi_pmid SELECT doi, pmid FROM _dp")
     con.execute(
-        f"""
-        CREATE TABLE rcr_cw AS
-        SELECT CAST(pmid AS VARCHAR) AS pmid, rcr, nih_percentile, citation_count
-        FROM {LAKE_ALIAS}.icite
-        WHERE pmid IS NOT NULL
-        """
+        "CREATE TABLE rcr_cw "
+        "(pmid VARCHAR, rcr DOUBLE, nih_percentile DOUBLE, citation_count BIGINT)"
     )
+    if rcr.height:
+        con.register("_rc", rcr.to_arrow())
+        con.execute("INSERT INTO rcr_cw SELECT pmid, rcr, nih_percentile, citation_count FROM _rc")
 
 
 def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]:
@@ -166,7 +174,6 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
     crosswalk.write_parquet(members_path)
 
     with duckdb_connect(database=":memory:") as con:
-        attach_lake(con)  # read-only; supplies the iCite enrichment crosswalks
         con.register("amap", amap.to_arrow())
         # Drop conflated author_ids (implausible works_count) from attribution.
         con.execute(
@@ -202,12 +209,13 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
         pub_types = publication_types_sql()
         min_year, max_year = MIN_VALID_YEAR, MAX_VALID_YEAR
 
-        _register_enrichment(con)
-
         # Per-work metadata shared by both output tables: backfilled PMID,
         # meeting-abstract flag, the publication flag, and iCite RCR. Restricted
         # to cc works so the raw-JSON issue extraction stays cheap.
         con.execute("CREATE TABLE cc_workids AS SELECT DISTINCT work_id FROM work_author")
+
+        # iCite crosswalks from cdsci-lake, keyed by the cohort works above.
+        _register_enrichment(con)
         con.execute(
             f"""
             CREATE TABLE issue_lookup AS

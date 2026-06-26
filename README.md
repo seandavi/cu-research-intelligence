@@ -183,9 +183,10 @@ lag). The dashboard surfaces these caveats inline.
 
 **Impact metrics**: field-weighted citation impact (FWCI) ships in the curated
 works; NIH iCite **RCR** and a DOI→PMID backfill are sourced from cdsci-lake's
-`icite` table at `build` time (ADR-0022/0023) — one shared, versioned source
-instead of per-project API calls. RCR (1.0 = median NIH-funded paper) is the most
-NCI-native metric and is the dashboard's headline impact figure.
+`icite.metadata` table at `build` time via the `cdsci.lake` accessor (ADR-0022/
+0023) — one shared, versioned source instead of per-project API calls. RCR (1.0 =
+median NIH-funded paper) is the most NCI-native metric and is the dashboard's
+headline impact figure.
 
 ### Headless API (FastAPI + DuckDB)
 

@@ -39,6 +39,18 @@ api = [
     "networkx>=3.6.1",
     "uvicorn[standard]>=0.48.0",
 ]
+# Build-time only: the cdsci-lake read client (ADR-0023). The host build/grants
+# steps source canonical facts from the shared lake through it; the serving `api`
+# image never installs or imports it (the lake imports are lazy), staying offline.
+lake = [
+    "cdsci-lake",
+]
+
+[tool.uv.sources]
+# Not published to PyPI yet — resolve the sibling repo by path. Switch to a git
+# source (e.g. { git = "https://github.com/seandavi/cdsci-lake", branch = "main" })
+# once it is published/pushed.
+cdsci-lake = { path = "../cdsci-lake" }
 
 [build-system]
 requires = ["uv_build>=0.8.11,<0.9.0"]

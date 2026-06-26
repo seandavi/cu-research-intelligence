@@ -3,8 +3,8 @@
 OpenAlex grant data is empty for our corpus (ADR-0010), so research funding comes
 from **NIH RePORTER** and is matched to roster members by **PI name** (RePORTER
 has no ORCID). The RePORTER projects now live in the shared lake
-(``lake.reporter_projects``, ADR-0022/0023) instead of being fetched per project
-from the RePORTER API — :func:`build_grants` reads them read-only.
+(``lake.reporter.projects``, ADR-0022/0023) instead of being fetched per project
+from the RePORTER API — :func:`build_grants` reads them via the cdsci-lake accessor.
 
 Matching is cohort-specific judgment and stays here (ADR-0022's resolution/
 attribution split): each project's PIs are matched to members by **exact** name
@@ -69,26 +69,15 @@ def _parse_pis(pi_names: str | None, pi_ids: str | None) -> list[dict]:
     return out
 
 
-def _load_lake_projects() -> pl.DataFrame:
-    """Read RePORTER projects from cdsci-lake, with structured PIs reconstructed."""
-    from ..lake import LAKE_ALIAS, attach_lake
-    from ..storage import duckdb_connect
+def _load_lake_projects(members: pl.DataFrame) -> pl.DataFrame:
+    """Read cohort RePORTER projects from cdsci-lake, with structured PIs rebuilt.
 
-    with duckdb_connect(database=":memory:") as con:
-        attach_lake(con)
-        raw = con.execute(
-            f"""
-            SELECT appl_id, core_project_num, project_num, fiscal_year,
-                   activity_code, admin_ic AS agency_ic,
-                   total_cost AS award_amount, direct_cost AS direct_cost_amt,
-                   project_title,
-                   project_start AS project_start_date,
-                   project_end AS project_end_date,
-                   org_name, pi_names, pi_ids,
-                   (TRY_CAST(project_end AS DATE) >= current_date) AS is_active
-            FROM {LAKE_ALIAS}.reporter_projects
-            """
-        ).pl()
+    Coarse-filtered in the lake to roster surnames (``members.last_norm``); the
+    exact match happens in :func:`build_grants`.
+    """
+    from ..lake import reporter_projects
+
+    raw = reporter_projects(members["last_norm"].drop_nulls().unique().to_list())
     return raw.with_columns(
         pl.struct(["pi_names", "pi_ids"])
         .map_elements(
@@ -110,16 +99,16 @@ def build_grants() -> dict[str, str]:
     """
     from .members import load_members, normalize_name
 
-    raw = _load_lake_projects()
-    if raw.height == 0:
-        raise FileNotFoundError(
-            "No RePORTER projects in cdsci-lake (lake.reporter_projects is empty). "
-            "Load them into the lake first (ADR-0022)."
-        )
-
     members = load_members().select(
         "Member_ID", "PrimaryProgram", "is_active", "last_norm", "first_norm"
     )
+
+    raw = _load_lake_projects(members)
+    if raw.height == 0:
+        raise FileNotFoundError(
+            "No matching RePORTER projects in cdsci-lake (lake.reporter.projects). "
+            "Check the lake backend / that RePORTER is loaded (ADR-0022)."
+        )
 
     pis = (
         raw.explode("pis")
