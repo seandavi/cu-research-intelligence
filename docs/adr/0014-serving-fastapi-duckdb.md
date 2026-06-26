@@ -1,7 +1,13 @@
 # 0014. Serving layer: FastAPI + DuckDB over curated Parquet
 
-- Status: accepted
+- Status: accepted; **serving artifact superseded by ADR-0023** (cdsci-lake)
 - Date: 2026-06-20
+
+> The shared in-process-DuckDB query layer and its function-as-source-of-truth
+> design are unchanged. What changed (ADR-0023): the API reads a single baked,
+> read-only `serving.duckdb` (marts + materialized FTS index) instead of globbing
+> the curated Parquet — `cancer_center.queries.connect()` falls back to Parquet
+> views only when unbaked (dev). Query signatures are untouched.
 
 ## Context
 
