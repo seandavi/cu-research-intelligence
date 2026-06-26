@@ -47,10 +47,9 @@ lake = [
 ]
 
 [tool.uv.sources]
-# Not published to PyPI yet — resolve the sibling repo by path. Switch to a git
-# source (e.g. { git = "https://github.com/seandavi/cdsci-lake", branch = "main" })
-# once it is published/pushed.
-cdsci-lake = { path = "../cdsci-lake" }
+# Not on PyPI yet — resolve from git (uv.lock pins the exact commit). Switch to a
+# plain version spec once it is published to an index.
+cdsci-lake = { git = "https://github.com/seandavi/cdsci-lake", branch = "main" }
 
 [build-system]
 requires = ["uv_build>=0.8.11,<0.9.0"]

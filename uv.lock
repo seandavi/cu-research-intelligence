@@ -357,7 +357,7 @@ wheels = [
 [[package]]
 name = "cdsci-lake"
 version = "0.1.0"
-source = { directory = "../cdsci-lake" }
+source = { git = "https://github.com/seandavi/cdsci-lake?branch=main#a923418cf3fb5777aa966d0abe7c24bd813c1bf6" }
 dependencies = [
     { name = "duckdb" },
     { name = "httpx" },
@@ -365,28 +365,6 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "tenacity" },
     { name = "typer" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "duckdb", specifier = ">=1.5.3" },
-    { name = "httpx", specifier = ">=0.28.1" },
-    { name = "httpx", marker = "extra == 'ingest'", specifier = ">=0.28.1" },
-    { name = "loguru", specifier = ">=0.7.3" },
-    { name = "pydantic-settings", specifier = ">=2.14.1" },
-    { name = "pytz", marker = "extra == 'ingest'", specifier = ">=2025.1" },
-    { name = "tenacity", specifier = ">=9.1.4" },
-    { name = "tenacity", marker = "extra == 'ingest'", specifier = ">=9.1.4" },
-    { name = "typer", specifier = ">=0.26.7" },
-    { name = "typer", marker = "extra == 'ingest'", specifier = ">=0.15.0" },
-]
-provides-extras = ["ingest"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "pytest-asyncio", specifier = ">=1.4.0" },
-    { name = "ruff", specifier = ">=0.15.15" },
 ]
 
 [[package]]
@@ -647,7 +625,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
-    { name = "cdsci-lake", marker = "extra == 'lake'", directory = "../cdsci-lake" },
+    { name = "cdsci-lake", marker = "extra == 'lake'", git = "https://github.com/seandavi/cdsci-lake?branch=main" },
     { name = "duckdb", specifier = ">=1.5.3" },
     { name = "fastapi", marker = "extra == 'api'", specifier = ">=0.136.3" },
     { name = "fastexcel", specifier = ">=0.20.2" },
