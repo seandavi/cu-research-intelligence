@@ -39,6 +39,15 @@ api = [
     "networkx>=3.6.1",
     "uvicorn[standard]>=0.48.0",
 ]
+# Application backend (ADR-0026): the writable overlay + Google OIDC auth that
+# runs beside the read-only analytics API. Installed with `api` for the serving
+# image when the app tier is enabled; the analytics-only path doesn't need it.
+app = [
+    "authlib>=1.3.2",
+    "google-cloud-secret-manager>=2.20.0",
+    "itsdangerous>=2.2.0",
+    "psycopg[binary,pool]>=3.2.0",
+]
 # Build-time only: the cdsci-lake read client (ADR-0023). The host build/grants
 # steps source canonical facts from the shared lake through it; the serving `api`
 # image never installs or imports it (the lake imports are lazy), staying offline.

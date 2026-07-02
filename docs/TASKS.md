@@ -77,20 +77,27 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
       `biblio_coupling` edge types of the membership spine's `member_link`
       (ADR-0025)
 
-## Milestone 5 — Application backend + auth (ADR-0026, todo)
+## Milestone 5 — Application backend + auth (ADR-0026, in progress)
 
-- [ ] Stand up the Postgres overlay in the compose stack (identity, sessions,
-      profiles, corrections, review) beside the read-only `serving.duckdb`;
-      implement the snapshot⊕overlay read-time merge pattern (one impl, reused)
-- [ ] Split FastAPI into read / app / scoring routers in one app; keep the public
-      analytics routes open, gate the app routes behind a session
-- [ ] Phase 1 auth: Google OIDC restricted to the CU Anschutz tenant; app-tier
-      session cookie; resolve login email → `Member_ID` via `member_identifier`
-      (ADR-0025) with a first-login claim/link flow + admin override
-- [ ] Role model + gating (`member` / `liaison` / `program_leader` / `librarian` /
-      `leadership` / `admin` / `viewer`), seeded from roster + admin assignment
+- [x] Stand up the Postgres overlay (`cancer_center/app/`): dedicated `uccc_app`
+      database + least-privilege role (separate from the shared lake catalog),
+      async psycopg pool, idempotent schema (`app_user`, `user_role`, `profile`,
+      `pub_correction`), GSM/env secret loader
+- [x] Mount the app tier as routers on the FastAPI app, guarded so the read-only
+      analytics API runs unchanged without the `app` extra; public analytics stay
+      open, app routes sit behind a signed session cookie
+- [x] Phase 1 auth: Google OIDC restricted to the `cuanschutz.edu` hosted domain;
+      app-tier session; resolve login email → `Member_ID` via `member_identifier`
+      (ADR-0025); `COALESCE` link preservation + admin-email seeding (admin override)
+- [x] Role model + gating (`member` / `liaison` / `program_leader` / `librarian` /
+      `leadership` / `admin` / viewer default) + `require_role` dependency
+- [ ] First-login claim/link UI for the roster-email≠login-email case (backend
+      link-preservation is in; the member-facing claim flow is pending)
 - [ ] Editable member profiles (bio/photo/keywords/links) + publication
-      claim/disclaim corrections; "connect ORCID" upgrades match confidence
+      claim/disclaim corrections; "connect ORCID" upgrades match confidence;
+      snapshot⊕overlay read-time merge onto `member_profile`
+- [ ] Enable the app tier in the deploy: install the `app` extra in the API image,
+      set `UCCC_APP_BASE_URL`, register the OIDC callback, add ADC/secrets access
 - [ ] Phase 2 (later) auth: one-time magic key to the **registered roster email**
       (single-use, short-TTL, rate-limited) for external/individual members
 - [ ] Visibility model (public / member-only / leadership fields) so roster PII
