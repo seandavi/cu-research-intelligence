@@ -74,6 +74,8 @@ def main() -> None:
             "citations": st.column_config.NumberColumn("Citations", format="%d"),
             "mean_fwci": st.column_config.NumberColumn("Mean FWCI", format="%.2f"),
             "median_rcr": st.column_config.NumberColumn("Median RCR", format="%.2f"),
+            "median_percentile": st.column_config.NumberColumn("Median pctile", format="%.3f"),
+            "pct_top_10": st.column_config.NumberColumn("Top 10%", format="%.1f"),
             "pct_inter_program": st.column_config.NumberColumn("Inter %", format="%.1f"),
             "pct_intra_program": st.column_config.NumberColumn("Intra %", format="%.1f"),
         },

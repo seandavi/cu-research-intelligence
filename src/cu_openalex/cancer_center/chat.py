@@ -69,7 +69,14 @@ TABLE works  -- one row per work with >=1 member author
   fwci (field-weighted citation impact; 1.0 = world avg),
   rcr (NIH iCite Relative Citation Ratio; 1.0 = median NIH-funded paper in field;
     the most NCI-native impact metric; NULL for ~20% without a PMID/too recent),
-  nih_percentile, is_oa (open access),
+  nih_percentile,
+  citation_percentile (OpenAlex field-AND-year-normalized citation rank in [0,1];
+    higher = more cited for its field/year; ~94% coverage; NULL otherwise),
+  is_top_1_pct, is_top_10_pct (bool: work is in the top 1% / 10% for its field+year;
+    for a responsible "strengths" share use avg(is_top_10_pct) over rows WHERE
+    citation_percentile IS NOT NULL, and report the median percentile too — never a
+    bare mean),
+  is_oa (open access),
   primary_topic, topic_subfield, topic_field, topic_domain, source_name (journal),
   n_total_authors, n_cc_members (cancer-center authors on the work),
   n_programs (distinct programs represented), programs (LIST of program names),
@@ -83,7 +90,8 @@ TABLE works  -- one row per work with >=1 member author
 
 TABLE member_works  -- member x work bridge (one row per member per work)
   member_id, author_id, program, work_id, publication_year, cited_by_count,
-  rcr, fwci, is_oa, is_publication, type, primary_topic, topic_field, source_name
+  rcr, fwci, citation_percentile, is_top_1_pct, is_top_10_pct, is_oa,
+  is_publication, type, primary_topic, topic_field, source_name
 
 TABLE institutions  -- work x institution bridge (for inter-institutional)
   work_id, institution_id, institution_name, country_code,

@@ -75,11 +75,16 @@ candidates with rationale** + a **P01 team-composition** suggestion.
   **cancer-relevance filtering** (wire the `pub_classification` classifier into counts).
 
 ## Parallel thread — #2 metrics (responsible research strengths)
-FWCI **percentiles / % in top 1%/10%** — data confirmed (OpenAlex
-`citation_normalized_percentile`, ~81% coverage in the raw layer). Curate into
-`works`, expose in KPI/queries (median + distribution, not the bare mean). Serves
-"what are we strongest in" responsibly. Then free **iCite APT / Cited-by-Clinical**
-(needs a lake-query extension).
+FWCI **percentiles / % in top 1%/10%** — **DONE**. OpenAlex
+`citation_normalized_percentile` (value + `is_in_top_{1,10}_percent`) pulled from
+the raw layer in `build.py` (deduped to latest update, like abstracts), ~94%
+coverage in curated works. Curated into `works` + `member_works` as
+`citation_percentile` / `is_top_1_pct` / `is_top_10_pct`; exposed as **median +
+%top** (never a bare mean) in `kpi_summary`, `program_summary`, `member_profile`,
+`/api/kpi`, and the Home + Program dashboard pages. Window numbers (2018–24):
+median percentile 0.83, ~36% top-10%, ~8% top-1%. R7 capability probe now
+`present`. Next: free **iCite APT / Cited-by-Clinical** (needs a lake-query
+extension).
 
 ## Where to resume
 1. ~~Add the remaining tools (`member_expertise`, `member_network`,

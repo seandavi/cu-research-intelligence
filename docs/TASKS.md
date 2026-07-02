@@ -147,10 +147,13 @@ Live at https://insights.uccc.cancerdatasci.org (app tier + Google OIDC deployed
       (`dashboard/pages/7_Collaborators.py` — chat panel with history,
       "Acting as" member picker, tool-trail expander). Login-based identity
       mode ships with profiles (kept alongside pick-a-member).
-- [ ] **#2 metrics (parallel):** FWCI **percentiles / % top-1%/10%** (OpenAlex
-      `citation_normalized_percentile`, ~81% coverage) — median + distribution;
-      then iCite **APT / Cited-by-Clinical** (lake-query extension). Responsible
-      "what are we strongest in".
+- [ ] **#2 metrics (parallel):** FWCI **percentiles / % top-1%/10%** **DONE**
+      (OpenAlex `citation_normalized_percentile`, ~94% coverage in curated works;
+      `citation_percentile` + `is_top_1_pct`/`is_top_10_pct` in `works` +
+      `member_works`; median + %top in `kpi_summary`/`program_summary`/
+      `member_profile`, `/api/kpi`, Home + Program pages — R7 probe now
+      `present`). Next: iCite **APT / Cited-by-Clinical** (lake-query extension).
+      Responsible "what are we strongest in".
 - [ ] **Retrieval nuance (backlog):** MeSH explosion; BM25 expert ranking (reuse
       ADR-0016 FTS); topic/concept matching; cancer-relevance filter on counts.
 - [ ] **Harness iteration 3:** Obscura CDP task-walkthroughs (persona scenarios) +
