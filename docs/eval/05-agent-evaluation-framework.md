@@ -6,15 +6,28 @@ state-of-the-art (and its caveats) from the landscape review (`01`, Part C/D).
 Design principle: **triangulate and never let agents be the sole gate** — the
 harness is a *regression + prioritization* tool paired with a human calibration set.
 
+## Two halves, evaluated together
+
+The platform is judged on **both** halves, and the harness covers both:
+
+- **Backend & capabilities** — is the data/API correct, and are the *required
+  capabilities actually present*? (content/chat correctness, API contracts, data
+  quality/provenance, metric correctness, and **capability coverage vs. the
+  stage-2 requirements**). Runnable now, deterministically, no LLM.
+- **UI/UX** — can each persona do their job, and is it usable/trustworthy? (page
+  heuristics, persona task-walkthroughs, trust/satisfaction). Playwright-driven,
+  iterations 2-3.
+
 ## What we're evaluating, and with what
 
-| Layer | Method | Agent role | Ground truth |
-| --- | --- | --- | --- |
-| **Content — NL→SQL chat** | Gold-set eval (relevancy, faithfulness/groundedness, schema-validity, transparency-of-query, safe-refusal) | LLM judge vs. gold Q/SQL | curated gold answers |
-| **Heuristics — each page** | Rubric scoring (Nielsen-10 + Few + viz-honesty + responsible-metrics rules from `04`) with 0–4 severity + evidence | LLM/MLLM judge over DOM+screenshot | human calibration set |
-| **Tasks — persona × job** | Goal-driven walkthroughs (success, steps, deviations) | persona "simulated user" driving the live SPA (Playwright) | human calibration set |
-| **Trust/satisfaction** | SUS, 4-item viz-trust inventory, calibrated-trust probes | (human survey; agents seed probes) | humans |
-| **Compliance** | Automated checks of `04`'s presentation rules (distribution? normalized? provenance label? caveat? no JIF/h-index?) | deterministic + judge | rules |
+| Layer | Half | Method | Agent role | Ground truth |
+| --- | --- | --- | --- | --- |
+| **Content — NL→SQL chat** | backend | Gold-set eval (relevancy, faithfulness/groundedness, schema-validity, transparency-of-query, safe-refusal) | LLM judge vs. gold Q/SQL | curated gold answers |
+| **API contract + capability coverage** | backend | Probe endpoints; assert invariants; score each stage-2 requirement present/partial/absent | deterministic | requirements (`02`) |
+| **Heuristics — each page** | UI/UX | Rubric scoring (Nielsen-10 + Few + viz-honesty + responsible-metrics rules from `04`) with 0–4 severity + evidence | LLM/MLLM judge over DOM+screenshot | human calibration set |
+| **Tasks — persona × job** | UI/UX | Goal-driven walkthroughs (success, steps, deviations) | persona "simulated user" driving the live SPA (Playwright) | human calibration set |
+| **Trust/satisfaction** | UI/UX | SUS, 4-item viz-trust inventory, calibrated-trust probes | (human survey; agents seed probes) | humans |
+| **Compliance** | both | Automated checks of `04`'s presentation rules (distribution? normalized? provenance label? caveat? no JIF/h-index?) | deterministic + judge | rules |
 
 ## Architecture (modeled on UXAgent/UXCascade + LLM-as-judge)
 
