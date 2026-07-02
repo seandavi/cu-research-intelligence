@@ -66,8 +66,12 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 - [ ] Re-run `stage2_classify.py` (or a port of it) against
       `catchment_review`/`catchment_review_tag` as the gold set to validate
       before trusting counts on any program beyond CPC/DT/THI
-- [ ] Deliverable A: cancer-relevance classifier for the full (non-cohort)
-      OpenAlex works corpus
+- [x] Deliverable A (deterministic stage): metadata-first cancer-relevance
+      classifier over the full ~1.17M-work corpus (`cancer_center/scoring.py`) —
+      OpenAlex Oncology topic + title cancer-term regex → `pub_classification`
+      mart; 185k cancer-relevant (15.9%), 45k `needs_review` agent queue
+- [ ] Deliverable A (agent stage): LLM followup on the `needs_review` band
+      (rubric-driven retain/exclude), writing `pub_classification` `source=llm_*`
 - [ ] Deliverable B: catchment-relevance classifier at cohort scale, writing
       `pub_classification`; once validated, surface `is_catchment_relevant` on
       `cancer_center/works.parquet` parallel to `is_publication`
