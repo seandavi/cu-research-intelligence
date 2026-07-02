@@ -127,6 +127,36 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 - [ ] Surface `is_catchment_relevant` on `works.parquet` and member profiles once
       a program is validated; manuscript manual-entry UI (the one new ingest path)
 
+## Milestone 7 — Evaluation + researcher-facing capabilities
+
+Live at https://insights.uccc.cancerdatasci.org (app tier + Google OIDC deployed).
+
+- [x] **Platform evaluation** (`docs/eval/`): 5 stages (landscape, requirements,
+      personas, impact measures, agent framework) + stakeholder ground truth +
+      researcher-round findings. Runnable harness `python -m cu_openalex.eval`
+      (chat content eval + backend capability coverage + Obscura UI layer).
+- [x] **Expert / collaborator finder** — `find_experts` / `GET /api/experts`
+      (topic/gene search → ranked members; `relative_to` annotates existing
+      connection, include-and-annotate not exclude). First curated collaborator tool.
+- [ ] **Collaborator agent** (see `docs/eval/collaborator-phase.md`): remaining
+      curated tools (`member_expertise`, `member_network`, `grants_in_area`,
+      `team_gap`) → interactive clarifying-question agent → collaborator UI panel;
+      both identity modes (pick-a-member + login).
+- [ ] **#2 metrics (parallel):** FWCI **percentiles / % top-1%/10%** (OpenAlex
+      `citation_normalized_percentile`, ~81% coverage) — median + distribution;
+      then iCite **APT / Cited-by-Clinical** (lake-query extension). Responsible
+      "what are we strongest in".
+- [ ] **Retrieval nuance (backlog):** MeSH explosion; BM25 expert ranking (reuse
+      ADR-0016 FTS); topic/concept matching; cancer-relevance filter on counts.
+- [ ] **Harness iteration 3:** Obscura CDP task-walkthroughs (persona scenarios) +
+      LLM-judge heuristics with a human calibration set (`docs/eval/05`).
+- [ ] **UI finding:** `/networks` renders text-sparse (force-graph canvas) — add a
+      text/accessible view.
+- [ ] **Reportable/trust foundation (admin round, later):** `is_reportable`
+      (research articles only, exclude reviews — our `is_publication` includes
+      reviews), fiscal-year windows, curated-vs-OpenAlex provenance/mode switch,
+      DT2/DT4-aligned exports. Do with Michaela + reporting stakeholders.
+
 ## Backlog / ideas
 
 - [ ] Compact the append-only `ingested_run` history; partition retention policy

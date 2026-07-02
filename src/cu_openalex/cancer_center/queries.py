@@ -914,16 +914,18 @@ def find_experts(
     query: str,
     *,
     program: str | None = None,
-    exclude_member: int | None = None,
+    relative_to: int | None = None,
     limit: int = 25,
 ) -> list[dict]:
     """Members whose publications match a topic/gene/keyword, ranked by relevant output.
 
-    ``program`` restricts to a program; ``exclude_member`` drops that member **and
-    their current co-authors** — the "find *new* collaborators for me" case, so the
-    result surfaces people the member does not already work with. A curated tool
-    (bound params, no free SQL) that answers "who works on X" / "researchers on
-    gene VVV" / "find collaborators", and feeds the interactive collaborator agent.
+    ``program`` restricts to a program. ``relative_to`` (a member id) does **not**
+    exclude anyone — it *annotates* each result with the existing connection to that
+    member (``coauth_shared`` publications, ``cogrant_shared`` awards,
+    ``existing_collaborator``), so the collaborator agent/UI can note "already
+    collaborates (12 shared papers)" rather than silently dropping strong
+    true-positive candidates. A curated tool (bound params, no free SQL) answering
+    "who works on X" / "researchers on gene VVV" / "find collaborators".
     """
     like = f"%{query.lower()}%"
     params: list = [like, like]
@@ -931,16 +933,29 @@ def find_experts(
     if program:
         prog_clause = "AND m.PrimaryProgram = ?"
         params.append(program)
-    excl_clause = ""
-    if exclude_member is not None:
-        x = int(exclude_member)  # interpolated below; int-coerced guard
-        excl_clause = f"""
-          AND m.Member_ID <> {x}
-          AND m.Member_ID NOT IN (
-            SELECT CASE WHEN member_a = {x} THEN member_b ELSE member_a END
-            FROM member_link
-            WHERE link_type = 'coauthorship' AND (member_a = {x} OR member_b = {x})
-          )"""
+
+    if relative_to is not None:
+        x = int(relative_to)  # interpolated; int-coerced guard
+        conn_cte = f"""
+        , conn AS (
+            SELECT CASE WHEN member_a = {x} THEN member_b ELSE member_a END AS member_id,
+                   max(CASE WHEN link_type = 'coauthorship' THEN weight END) AS coauth_shared,
+                   max(CASE WHEN link_type = 'cogrant' THEN weight END) AS cogrant_shared
+            FROM member_link WHERE member_a = {x} OR member_b = {x}
+            GROUP BY 1
+        )"""
+        conn_select = (
+            "c.coauth_shared, c.cogrant_shared, "
+            "(c.coauth_shared IS NOT NULL OR c.cogrant_shared IS NOT NULL) AS existing_collaborator"
+        )
+        conn_join = "LEFT JOIN conn c ON c.member_id = m.Member_ID"
+        self_clause = f"AND m.Member_ID <> {x}"
+    else:
+        conn_cte = ""
+        conn_select = "NULL AS coauth_shared, NULL AS cogrant_shared, NULL AS existing_collaborator"
+        conn_join = ""
+        self_clause = ""
+
     return run_params(
         f"""
         WITH matched AS (
@@ -953,14 +968,16 @@ def find_experts(
             FROM member_works mw JOIN matched USING (work_id)
             WHERE mw.is_publication
             GROUP BY 1
-        )
+        ){conn_cte}
         SELECT m.Member_ID AS member_id,
                m.First_Name || ' ' || m.Last_Name AS name,
                m.PrimaryProgram AS program,
                m.confidence AS match_confidence,
-               pm.n_relevant
+               pm.n_relevant,
+               {conn_select}
         FROM per_member pm JOIN members m ON m.Member_ID = pm.member_id
-        WHERE m.author_id IS NOT NULL {prog_clause} {excl_clause}
+        {conn_join}
+        WHERE m.author_id IS NOT NULL {prog_clause} {self_clause}
         ORDER BY pm.n_relevant DESC, name
         LIMIT {int(limit)}
         """,
