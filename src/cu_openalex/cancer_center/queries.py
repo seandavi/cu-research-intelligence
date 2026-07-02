@@ -905,3 +905,64 @@ def org_units() -> list[dict]:
         ORDER BY o.level, o.name
         """
     ).to_dicts()
+
+
+# --------------------------------------------------------------------------- #
+# Collaborator / expertise tools (curated, safe — the collaborator-agent base)
+# --------------------------------------------------------------------------- #
+def find_experts(
+    query: str,
+    *,
+    program: str | None = None,
+    exclude_member: int | None = None,
+    limit: int = 25,
+) -> list[dict]:
+    """Members whose publications match a topic/gene/keyword, ranked by relevant output.
+
+    ``program`` restricts to a program; ``exclude_member`` drops that member **and
+    their current co-authors** — the "find *new* collaborators for me" case, so the
+    result surfaces people the member does not already work with. A curated tool
+    (bound params, no free SQL) that answers "who works on X" / "researchers on
+    gene VVV" / "find collaborators", and feeds the interactive collaborator agent.
+    """
+    like = f"%{query.lower()}%"
+    params: list = [like, like]
+    prog_clause = ""
+    if program:
+        prog_clause = "AND m.PrimaryProgram = ?"
+        params.append(program)
+    excl_clause = ""
+    if exclude_member is not None:
+        x = int(exclude_member)  # interpolated below; int-coerced guard
+        excl_clause = f"""
+          AND m.Member_ID <> {x}
+          AND m.Member_ID NOT IN (
+            SELECT CASE WHEN member_a = {x} THEN member_b ELSE member_a END
+            FROM member_link
+            WHERE link_type = 'coauthorship' AND (member_a = {x} OR member_b = {x})
+          )"""
+    return run_params(
+        f"""
+        WITH matched AS (
+            SELECT work_id FROM works
+            WHERE is_publication
+              AND (lower(title) LIKE ? OR lower(COALESCE(abstract, '')) LIKE ?)
+        ),
+        per_member AS (
+            SELECT mw.member_id, count(DISTINCT mw.work_id) AS n_relevant
+            FROM member_works mw JOIN matched USING (work_id)
+            WHERE mw.is_publication
+            GROUP BY 1
+        )
+        SELECT m.Member_ID AS member_id,
+               m.First_Name || ' ' || m.Last_Name AS name,
+               m.PrimaryProgram AS program,
+               m.confidence AS match_confidence,
+               pm.n_relevant
+        FROM per_member pm JOIN members m ON m.Member_ID = pm.member_id
+        WHERE m.author_id IS NOT NULL {prog_clause} {excl_clause}
+        ORDER BY pm.n_relevant DESC, name
+        LIMIT {int(limit)}
+        """,
+        params,
+    ).to_dicts()
