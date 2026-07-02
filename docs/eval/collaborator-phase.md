@@ -50,8 +50,11 @@ candidates with rationale** + a **P01 team-composition** suggestion.
   Dr.-X with existing-tie annotation; P01 team via `team_gap`; ambiguous ask →
   clarifies). Deterministic parts (handlers, `find_member`, graceful no-key path)
   covered in `tests/test_api.py`.
-- **UI (next):** a conversational **collaborator panel** (or a mode on Ask)
-  rendering the ranked candidates + `tool_calls` trail; both identity modes.
+- **UI — DONE** (`dashboard/pages/7_Collaborators.py`). Conversational panel:
+  chat loop with history (so clarifying follow-ups work), an "Acting as" member
+  picker (pick-a-member identity mode), and a "Tools used" trail expander.
+  Verified headlessly with Streamlit `AppTest` (renders; a real "Who works on
+  KRAS?" turn drives `find_experts` and renders the ranked answer + trail).
 
 ## Decisions (locked)
 - **Include-and-annotate existing collaborators**, don't exclude them — an existing
@@ -82,9 +85,9 @@ FWCI **percentiles / % in top 1%/10%** — data confirmed (OpenAlex
 1. ~~Add the remaining tools (`member_expertise`, `member_network`,
    `grants_in_area`, `team_gap`) + endpoints.~~ **DONE** — all four curated tools
    + endpoints + `tests/test_api.py` coverage (same pattern as `find_experts`).
-2. ~~Build the agent (clarifying-question loop).~~ **DONE**
-   (`collaborator.py` + `POST /api/collaborator`). Remaining: **collaborator UI
-   panel** rendering ranked candidates + the tool trail. **← next**
-3. In parallel: #2 percentiles.
+2. ~~Build the agent (clarifying-question loop) + collaborator UI panel.~~
+   **DONE** — `collaborator.py`, `POST /api/collaborator`, and
+   `dashboard/pages/7_Collaborators.py`.
+3. In parallel: #2 percentiles. **← next**
 4. Redeploy to put `/api/experts` + the above on the live site.
 5. Evaluate with the Obscura harness (`python -m cu_openalex.eval --base-url …`).

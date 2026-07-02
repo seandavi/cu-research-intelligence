@@ -143,8 +143,10 @@ Live at https://insights.uccc.cancerdatasci.org (app tier + Google OIDC deployed
       `member_network`, `grants_in_area`, `team_gap` + `/api/*` endpoints +
       tests); **agent DONE** (`collaborator.py` + `POST /api/collaborator` —
       Gemini function-calling over the tools, clarifying-question loop,
-      people-not-institutions, existing-tie annotation) → next: collaborator UI
-      panel; both identity modes (pick-a-member + login).
+      people-not-institutions, existing-tie annotation); **UI DONE**
+      (`dashboard/pages/7_Collaborators.py` — chat panel with history,
+      "Acting as" member picker, tool-trail expander). Login-based identity
+      mode ships with profiles (kept alongside pick-a-member).
 - [ ] **#2 metrics (parallel):** FWCI **percentiles / % top-1%/10%** (OpenAlex
       `citation_normalized_percentile`, ~81% coverage) — median + distribution;
       then iCite **APT / Cited-by-Clinical** (lake-query extension). Responsible
