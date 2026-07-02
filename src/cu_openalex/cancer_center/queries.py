@@ -107,9 +107,11 @@ def run_params(sql: str, params: list) -> pl.DataFrame:
 def table_exists(name: str) -> bool:
     """True if a view/table ``name`` is registered (for optional datasets)."""
     with _LOCK:
-        n = connect().execute(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name]
-        ).fetchone()[0]
+        n = (
+            connect()
+            .execute("SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name])
+            .fetchone()[0]
+        )
     return bool(n)
 
 
@@ -983,3 +985,250 @@ def find_experts(
         """,
         params,
     ).to_dicts()
+
+
+def find_member(name: str, *, limit: int = 10) -> list[dict]:
+    """Resolve a (partial) name to candidate members — the agent's name→id glue.
+
+    Matches ``name`` as a substring of ``First Last`` (case-insensitive), so the
+    collaborator agent can turn "Dr. Fry" / "terry fry" into a ``member_id`` for
+    ``find_experts(relative_to=…)`` or ``team_gap(seed_members=[…])``. Resolved
+    members (with an OpenAlex author) rank first, then by publication volume so
+    the most likely intended person leads.
+    """
+    like = f"%{name.lower()}%"
+    return run_params(
+        """
+        SELECT m.Member_ID AS member_id,
+               m.First_Name || ' ' || m.Last_Name AS name,
+               m.PrimaryProgram AS program, m.FacultyRank AS rank,
+               (m.author_id IS NOT NULL) AS resolved,
+               count(DISTINCT mw.work_id) AS publications
+        FROM members m
+        LEFT JOIN member_works mw ON mw.member_id = m.Member_ID
+        WHERE lower(m.First_Name || ' ' || m.Last_Name) LIKE ?
+        GROUP BY ALL
+        ORDER BY resolved DESC, publications DESC, name
+        LIMIT ?
+        """,
+        [like, int(limit)],
+    ).to_dicts()
+
+
+def member_expertise(
+    member_id: int, min_year: int | None = None, max_year: int | None = None
+) -> dict:
+    """A member's expertise profile: top fine-grained topics and broad fields.
+
+    The inverse of :func:`find_experts` — given a member instead of a topic,
+    what do they work on? Returns ``{member, top_topics, top_fields}`` where
+    ``top_topics`` are OpenAlex primary topics (fine-grained) and ``top_fields``
+    the broader field rollup, each with publication counts over the window.
+    Empty dict if the member doesn't exist.
+    """
+    member_id = int(member_id)  # interpolated below; coerce to int as a guard
+    yc = _year_clause(min_year, max_year, col="mw.publication_year")
+    member = run_sql(
+        f"""
+        SELECT Member_ID AS member_id, First_Name || ' ' || Last_Name AS name,
+               PrimaryProgram AS program, FacultyRank AS rank
+        FROM members WHERE Member_ID = {member_id}
+        """
+    ).to_dicts()
+    if not member:
+        return {}
+
+    def _top(col: str, limit: int) -> list[dict]:
+        return run_sql(
+            f"""
+            SELECT mw.{col} AS topic, count(DISTINCT mw.work_id) AS publications
+            FROM member_works mw
+            WHERE mw.member_id = {member_id} AND {yc} AND mw.{col} IS NOT NULL
+            GROUP BY 1 ORDER BY 2 DESC, 1 LIMIT {limit}
+            """
+        ).to_dicts()
+
+    return {
+        "member": member[0],
+        "top_topics": _top("primary_topic", 15),
+        "top_fields": _top("topic_field", 8),
+    }
+
+
+def member_network(member_id: int) -> dict:
+    """A member's existing collaborators: co-authorship + co-grant edges per person.
+
+    Pivots the ``member_link`` spine edges (ADR-0025) so each row is one other
+    member with ``shared_publications`` / ``shared_grants`` counts — the "who do
+    they already work with" tool for the collaborator agent (vs
+    :func:`member_links`, which returns one row per edge type). Requires the
+    membership spine (see :func:`spine_available`). Empty dict if the member
+    doesn't exist.
+    """
+    member_id = int(member_id)  # interpolated below; coerce to int as a guard
+    member = run_sql(
+        f"""
+        SELECT Member_ID AS member_id, First_Name || ' ' || Last_Name AS name,
+               PrimaryProgram AS program
+        FROM members WHERE Member_ID = {member_id}
+        """
+    ).to_dicts()
+    if not member:
+        return {}
+    connections = run_sql(
+        f"""
+        WITH e AS (
+            SELECT CASE WHEN member_a = {member_id} THEN member_b ELSE member_a END
+                       AS other_id,
+                   link_type, weight
+            FROM member_link
+            WHERE (member_a = {member_id} OR member_b = {member_id})
+              AND link_type IN ('coauthorship', 'cogrant')
+        ),
+        pivoted AS (
+            SELECT other_id,
+                   max(CASE WHEN link_type = 'coauthorship' THEN weight END)
+                       AS shared_publications,
+                   max(CASE WHEN link_type = 'cogrant' THEN weight END) AS shared_grants
+            FROM e GROUP BY 1
+        )
+        SELECT m.Member_ID AS member_id,
+               m.First_Name || ' ' || m.Last_Name AS name,
+               m.PrimaryProgram AS program,
+               p.shared_publications, p.shared_grants
+        FROM pivoted p JOIN members m ON m.Member_ID = p.other_id
+        ORDER BY COALESCE(p.shared_publications, 0) DESC,
+                 COALESCE(p.shared_grants, 0) DESC, name
+        """
+    ).to_dicts()
+    return {"member": member[0], "connections": connections}
+
+
+def grants_in_area(query: str, *, limit: int = 25) -> list[dict]:
+    """Grants whose title matches a topic/keyword, with the funded members.
+
+    Answers "who is funded to work on X" / "is there a grant about ZZZ". One row
+    per core project (dedup'd across fiscal years), with total award summed over
+    distinct award records and the cc members on it. ``is_active`` derives from
+    the project end date, as in :func:`member_grants`.
+    """
+    like = f"%{query.lower()}%"
+    return run_params(
+        f"""
+        WITH g AS (
+            SELECT * FROM member_grants WHERE lower(project_title) LIKE ?
+        ),
+        per_grant AS (
+            SELECT core_project_num,
+                   max(project_title) AS title,
+                   any_value(activity_code) AS activity_code,
+                   any_value(agency_ic) AS agency,
+                   max(fiscal_year) AS latest_fy,
+                   (max(TRY_CAST(project_end_date AS TIMESTAMP)) >= current_date)
+                       AS is_active
+            FROM g GROUP BY 1
+        ),
+        awards AS (  -- dedupe by award record so multi-PI rows don't double-count
+            SELECT core_project_num, sum(award_amount)::BIGINT AS total_award
+            FROM (SELECT DISTINCT core_project_num, appl_id, award_amount FROM g)
+            GROUP BY 1
+        ),
+        folks_m AS (
+            SELECT core_project_num, member_id, bool_or(is_contact_pi) AS is_contact_pi
+            FROM g GROUP BY 1, 2
+        ),
+        folks AS (
+            SELECT f.core_project_num,
+                   array_agg({{'member_id': m.Member_ID,
+                              'name': m.First_Name || ' ' || m.Last_Name,
+                              'program': m.PrimaryProgram,
+                              'is_contact_pi': f.is_contact_pi}}
+                             ORDER BY f.is_contact_pi DESC, m.Last_Name) AS members
+            FROM folks_m f JOIN members m ON m.Member_ID = f.member_id
+            GROUP BY 1
+        )
+        SELECT p.core_project_num, p.title, p.activity_code, p.agency, p.latest_fy,
+               a.total_award, p.is_active, f.members
+        FROM per_grant p
+        JOIN awards a USING (core_project_num)
+        JOIN folks f USING (core_project_num)
+        ORDER BY a.total_award DESC NULLS LAST
+        LIMIT {int(limit)}
+        """,
+        [like],
+    ).to_dicts()
+
+
+def team_gap(
+    needed_expertise: list[str],
+    seed_members: list[int] | None = None,
+    *,
+    per_area_limit: int = 5,
+) -> dict:
+    """Team-composition helper for P01/U-style proposals.
+
+    For each needed expertise area: which ``seed_members`` already cover it
+    (``covered_by``, with their relevant-publication counts) and which other
+    members are the strongest candidates to fill it (``candidates``, ranked by
+    relevant output, annotated with any existing co-authorship/co-grant
+    connection to the seed team — include-and-annotate, as in
+    :func:`find_experts`). Programs are carried on every row so the agent/UI can
+    reason about cross-program (inter-programmatic) composition.
+    """
+    seeds = [int(s) for s in (seed_members or [])]
+    seed_rows: list[dict] = []
+    seed_conn: dict[int, dict] = {}
+    if seeds:
+        ids = ", ".join(str(s) for s in seeds)  # int-coerced above; safe to inline
+        seed_rows = run_sql(
+            f"""
+            SELECT Member_ID AS member_id, First_Name || ' ' || Last_Name AS name,
+                   PrimaryProgram AS program
+            FROM members WHERE Member_ID IN ({ids}) ORDER BY member_id
+            """
+        ).to_dicts()
+        # Existing connections from anyone to the seed team, summed across seeds.
+        seed_conn = {
+            r["other_id"]: r
+            for r in run_sql(
+                f"""
+                SELECT CASE WHEN member_a IN ({ids}) THEN member_b ELSE member_a END
+                           AS other_id,
+                       sum(CASE WHEN link_type = 'coauthorship' THEN weight END)
+                           AS coauth_with_seeds,
+                       sum(CASE WHEN link_type = 'cogrant' THEN weight END)
+                           AS cogrant_with_seeds
+                FROM member_link
+                WHERE member_a IN ({ids}) OR member_b IN ({ids})
+                GROUP BY 1
+                """
+            ).to_dicts()
+        }
+
+    areas = []
+    for term in needed_expertise:
+        ranked = find_experts(term, limit=1000)
+        covered_by = [
+            {k: r[k] for k in ("member_id", "name", "program", "n_relevant")}
+            for r in ranked
+            if r["member_id"] in seeds
+        ]
+        candidates = []
+        for r in ranked:
+            if r["member_id"] in seeds:
+                continue
+            conn = seed_conn.get(r["member_id"], {})
+            candidates.append(
+                {
+                    "member_id": r["member_id"],
+                    "name": r["name"],
+                    "program": r["program"],
+                    "n_relevant": r["n_relevant"],
+                    "coauth_with_seeds": conn.get("coauth_with_seeds"),
+                    "cogrant_with_seeds": conn.get("cogrant_with_seeds"),
+                }
+            )
+            if len(candidates) >= per_area_limit:
+                break
+        areas.append({"query": term, "covered_by": covered_by, "candidates": candidates})
+    return {"seed": seed_rows, "areas": areas}

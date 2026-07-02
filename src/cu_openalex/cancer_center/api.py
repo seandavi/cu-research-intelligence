@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import chat, networks
+from . import chat, collaborator, networks
 from . import queries as q
 from .programs import CURRENT_PROGRAMS
 
@@ -329,6 +329,59 @@ def experts(
     return q.find_experts(q_, program=program, relative_to=relative_to, limit=limit)
 
 
+@app.get("/api/member/{member_id}/expertise")
+def member_expertise(
+    member_id: int, min_year: int | None = None, max_year: int | None = None
+) -> dict:
+    """A member's expertise profile: top fine-grained topics and broad fields
+    (the inverse of ``/api/experts`` — given a member, what do they work on?)."""
+    result = q.member_expertise(member_id, min_year, max_year)
+    if not result:
+        raise HTTPException(status_code=404, detail="member not found")
+    return result
+
+
+@app.get("/api/member/{member_id}/network")
+def member_network(member_id: int) -> dict:
+    """A member's existing collaborators (co-authorship + co-grant, one row per
+    other member) — "who do they already work with"."""
+    if not q.spine_available():
+        raise HTTPException(status_code=404, detail="membership spine not built")
+    result = q.member_network(member_id)
+    if not result:
+        raise HTTPException(status_code=404, detail="member not found")
+    return result
+
+
+@app.get("/api/grants-in-area")
+def grants_in_area(
+    q_: str = Query(..., alias="q", min_length=2, max_length=100),
+    limit: int = Query(25, ge=1, le=100),
+) -> list[dict]:
+    """Grants matching a topic/keyword, with the funded members — "who is funded
+    to work on X"."""
+    if not q.grants_available():
+        raise HTTPException(status_code=404, detail="grants not built")
+    return q.grants_in_area(q_, limit=limit)
+
+
+@app.get("/api/team-gap")
+def team_gap(
+    expertise: list[str] = Query(..., min_length=1, max_length=10),
+    seed: list[int] | None = Query(None, max_length=20),
+    per_area_limit: int = Query(5, ge=1, le=25),
+) -> dict:
+    """Team-composition helper (P01/U): per needed expertise area, which seed
+    members cover it and the strongest candidates to fill the gap, annotated
+    with existing connections to the seed team."""
+    if seed and not q.spine_available():
+        raise HTTPException(status_code=404, detail="membership spine not built")
+    for term in expertise:
+        if not 2 <= len(term) <= 100:
+            raise HTTPException(status_code=422, detail="expertise terms must be 2-100 chars")
+    return q.team_gap(expertise, seed, per_area_limit=per_area_limit)
+
+
 # --- Chat (NL → read-only SQL) ----------------------------------------------
 
 
@@ -356,5 +409,39 @@ def ask(req: ChatRequest) -> ChatResponse:
         queries=result.queries,
         table=table,
         suggestions=result.suggestions,
+        error=result.error,
+    )
+
+
+# --- Collaborator agent (curated-tool function-calling) ---------------------
+
+
+class CollaboratorRequest(BaseModel):
+    question: str
+    history: list[dict] | None = None
+    model: str | None = None
+
+
+class CollaboratorResponse(BaseModel):
+    answer: str
+    tool_calls: list[dict] = []
+    needs_clarification: bool = False
+    error: str | None = None
+
+
+@app.post("/api/collaborator", response_model=CollaboratorResponse)
+def collaborate(req: CollaboratorRequest) -> CollaboratorResponse:
+    """Interactive collaborator/expertise agent over the curated tools.
+
+    Reasons over ``find_member`` / ``find_experts`` / ``member_expertise`` /
+    ``member_network`` / ``grants_in_area`` / ``team_gap``, asking a clarifying
+    question when the ask is ambiguous. ``tool_calls`` is the trail (for the UI /
+    eval); ``needs_clarification`` is True when the agent asked instead of
+    answering from data."""
+    result = collaborator.ask(req.question, history=req.history, model=req.model)
+    return CollaboratorResponse(
+        answer=result.answer,
+        tool_calls=result.tool_calls,
+        needs_clarification=result.needs_clarification,
         error=result.error,
     )

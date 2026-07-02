@@ -31,16 +31,30 @@ candidates with rationale** + a **P01 team-composition** suggestion.
   `GET /api/experts`). Members matching a topic/gene/keyword, ranked by relevant
   output. `relative_to` **annotates the existing connection** (shared papers/grants,
   `existing_collaborator`) — **include-and-annotate, not exclude** (decision below).
-- `member_expertise(member_id)` — a member's top topics/genes (reuse profile top_topics).
-- `member_network(member_id)` — existing co-authors/co-grant (from `member_link`).
-- `grants_in_area(query)` — who is funded there (`member_grants.project_title`).
-- `team_gap(needed_expertise[], seed_members[])` — for P01/U: cover the needed
-  expertise areas, suggest complementary members (cross-program aware).
+- **`member_expertise(member_id)` — DONE** (`GET /api/member/{id}/expertise`).
+  A member's top primary topics + broad fields — the inverse of `find_experts`.
+- **`member_network(member_id)` — DONE** (`GET /api/member/{id}/network`).
+  Existing co-authors/co-grant pivoted one-row-per-member (from `member_link`).
+- **`grants_in_area(query)` — DONE** (`GET /api/grants-in-area`). Grants whose
+  title matches, with the funded cc members + contact-PI flag.
+- **`team_gap(needed_expertise[], seed_members[])` — DONE** (`GET /api/team-gap`).
+  For P01/U: per area, which seeds cover it + ranked candidates to fill the gap,
+  annotated with existing connections to the seed team (cross-program aware).
 
-### Agent + UI (next)
-LLM orchestration (function-calling) over the tools with a clarifying-question loop;
-a conversational **collaborator panel** (or a mode on Ask). Evaluate each step with
-the harness member scenarios (`eval/researcher_questions.py`).
+### Agent + UI
+- **Agent — DONE** (`collaborator.py`, `POST /api/collaborator`). Gemini
+  function-calling over the curated tools **+ `find_member`** (name→id glue) with
+  a clarifying-question loop. Presents *people, never institutions*; annotates
+  existing ties; returns `needs_clarification` when it asks instead of answering.
+  Verified end-to-end on the member scenarios (KRAS expertise; collaborators-for-
+  Dr.-X with existing-tie annotation; P01 team via `team_gap`; ambiguous ask →
+  clarifies). Deterministic parts (handlers, `find_member`, graceful no-key path)
+  covered in `tests/test_api.py`.
+- **UI — DONE** (`dashboard/pages/7_Collaborators.py`). Conversational panel:
+  chat loop with history (so clarifying follow-ups work), an "Acting as" member
+  picker (pick-a-member identity mode), and a "Tools used" trail expander.
+  Verified headlessly with Streamlit `AppTest` (renders; a real "Who works on
+  KRAS?" turn drives `find_experts` and renders the ranked answer + trail).
 
 ## Decisions (locked)
 - **Include-and-annotate existing collaborators**, don't exclude them — an existing
@@ -68,9 +82,12 @@ FWCI **percentiles / % in top 1%/10%** — data confirmed (OpenAlex
 (needs a lake-query extension).
 
 ## Where to resume
-1. Add the remaining tools (`member_expertise`, `member_network`, `grants_in_area`,
-   `team_gap`) + endpoints — same curated pattern as `find_experts`.
-2. Build the agent (clarifying-question loop) + collaborator UI panel.
-3. In parallel: #2 percentiles.
+1. ~~Add the remaining tools (`member_expertise`, `member_network`,
+   `grants_in_area`, `team_gap`) + endpoints.~~ **DONE** — all four curated tools
+   + endpoints + `tests/test_api.py` coverage (same pattern as `find_experts`).
+2. ~~Build the agent (clarifying-question loop) + collaborator UI panel.~~
+   **DONE** — `collaborator.py`, `POST /api/collaborator`, and
+   `dashboard/pages/7_Collaborators.py`.
+3. In parallel: #2 percentiles. **← next**
 4. Redeploy to put `/api/experts` + the above on the live site.
 5. Evaluate with the Obscura harness (`python -m cu_openalex.eval --base-url …`).

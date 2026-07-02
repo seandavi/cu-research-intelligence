@@ -122,6 +122,128 @@ def test_experts_finder(client: TestClient):
     assert client.get("/api/experts?q=a").status_code == 422
 
 
+def test_member_expertise(client: TestClient):
+    from cu_openalex.cancer_center import queries as q
+
+    mid = int(
+        q.run_sql("SELECT member_id FROM member_works GROUP BY 1 ORDER BY count(*) DESC LIMIT 1")[
+            "member_id"
+        ][0]
+    )
+    r = client.get(f"/api/member/{mid}/expertise")
+    assert r.status_code == 200
+    prof = r.json()
+    assert prof["member"]["member_id"] == mid
+    assert prof["top_topics"] and prof["top_fields"]
+    # ranked by publication count, descending
+    counts = [t["publications"] for t in prof["top_topics"]]
+    assert counts == sorted(counts, reverse=True)
+    assert client.get("/api/member/999999999/expertise").status_code == 404
+
+
+@requires_spine
+def test_member_network(client: TestClient):
+    from cu_openalex.cancer_center import queries as q
+
+    mid = int(
+        q.run_sql(
+            "SELECT member_a FROM member_link WHERE link_type = 'coauthorship' "
+            "ORDER BY weight DESC LIMIT 1"
+        )["member_a"][0]
+    )
+    net = client.get(f"/api/member/{mid}/network").json()
+    assert net["member"]["member_id"] == mid
+    conns = net["connections"]
+    assert conns and all("shared_publications" in c and "name" in c for c in conns)
+    # one row per other member (pivoted, not per edge type)
+    ids = [c["member_id"] for c in conns]
+    assert len(ids) == len(set(ids))
+    assert client.get("/api/member/999999999/network").status_code == 404
+
+
+def test_grants_in_area(client: TestClient):
+    from cu_openalex.cancer_center import queries as q
+
+    if not q.grants_available():
+        pytest.skip("grants not built")
+    grants = client.get("/api/grants-in-area?q=cancer&limit=10").json()
+    assert grants and all("core_project_num" in g and g["members"] for g in grants)
+    assert all("cancer" in g["title"].lower() for g in grants)
+    # members carry identity + contact-PI flag for the agent/UI
+    m0 = grants[0]["members"][0]
+    assert {"member_id", "name", "program", "is_contact_pi"} <= set(m0)
+    assert client.get("/api/grants-in-area?q=a").status_code == 422
+
+
+@requires_spine
+def test_team_gap(client: TestClient):
+    from cu_openalex.cancer_center import queries as q
+
+    # seed with the strongest-linked member so connections annotate
+    seed = int(
+        q.run_sql(
+            "SELECT member_a FROM member_link WHERE link_type = 'coauthorship' "
+            "ORDER BY weight DESC LIMIT 1"
+        )["member_a"][0]
+    )
+    r = client.get(f"/api/team-gap?expertise=immunotherapy&expertise=genomics&seed={seed}")
+    assert r.status_code == 200
+    gap = r.json()
+    assert [s["member_id"] for s in gap["seed"]] == [seed]
+    assert [a["query"] for a in gap["areas"]] == ["immunotherapy", "genomics"]
+    for area in gap["areas"]:
+        # seeds never appear among candidates; candidates are ranked
+        assert all(c["member_id"] != seed for c in area["candidates"])
+        counts = [c["n_relevant"] for c in area["candidates"]]
+        assert counts == sorted(counts, reverse=True)
+        assert all("coauth_with_seeds" in c for c in area["candidates"])
+    assert client.get("/api/team-gap").status_code == 422  # expertise required
+
+
+def test_find_member_resolves_name(client: TestClient):
+    from cu_openalex.cancer_center import queries as q
+
+    # pick a real resolved member, then resolve them back by (partial) name
+    known = q.run_sql(
+        "SELECT First_Name || ' ' || Last_Name AS name, Member_ID FROM members "
+        "WHERE author_id IS NOT NULL ORDER BY Member_ID LIMIT 1"
+    ).to_dicts()[0]
+    cands = q.find_member(known["name"].lower())
+    assert any(c["member_id"] == known["Member_ID"] for c in cands)
+    # resolved members rank ahead of unresolved
+    resolved_flags = [c["resolved"] for c in cands]
+    assert resolved_flags == sorted(resolved_flags, reverse=True)
+    assert q.find_member("zzzznotarealname") == []
+
+
+def test_collaborator_tool_handlers():
+    """The curated-tool dispatch resolves against real data without the LLM."""
+    from cu_openalex.cancer_center import collaborator as co
+    from cu_openalex.cancer_center import queries as q
+
+    top = q.find_experts("cancer", limit=1)[0]
+    mid = top["member_id"]
+    # each handler returns JSON-shaped results for the model
+    assert co._HANDLERS["find_member"]({"name": top["name"]})
+    experts = co._HANDLERS["find_experts"]({"query": "cancer", "limit": 5})
+    assert len(experts) <= 5 and all("n_relevant" in e for e in experts)
+    assert co._HANDLERS["member_expertise"]({"member_id": mid})["member"]["member_id"] == mid
+    gap = co._HANDLERS["team_gap"]({"needed_expertise": ["genomics"], "seed_members": [mid]})
+    assert gap["areas"][0]["query"] == "genomics"
+
+
+def test_collaborator_endpoint_unconfigured(client: TestClient, monkeypatch):
+    """Without a Gemini key the endpoint degrades to a well-formed error, not 500."""
+    from cu_openalex.cancer_center import collaborator as co
+
+    monkeypatch.setattr(co, "_api_key", lambda: None)
+    r = client.post("/api/collaborator", json={"question": "who works on KRAS?"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["error"] and body["answer"] == ""
+    assert body["tool_calls"] == [] and body["needs_clarification"] is False
+
+
 @requires_spine
 def test_member_links_endpoint(client: TestClient):
     from cu_openalex.cancer_center import queries as q
