@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import type { YearRange } from "../api/types";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 import { NetworkGraph } from "../components/NetworkGraph";
 import { Card, Caveat, ErrorNote, Loading } from "../components/ui";
 import { useMeta, useNetwork } from "../hooks/useApi";
@@ -22,6 +23,22 @@ export function Networks({ range }: { range: YearRange }) {
     () => [...(net.data?.nodes ?? [])].sort((a, b) => b.betweenness - a.betweenness).slice(0, 15),
     [net.data],
   );
+
+  // Prose summary of the graph — the canvas has no accessible content, so this
+  // (plus the bridge table) is the text alternative. Rendered at page level so
+  // it survives even if the force-graph canvas fails to initialize.
+  const summary = useMemo(() => {
+    if (!net.data) return "";
+    const nPrograms = new Set(net.data.nodes.map((n) => n.program)).size;
+    const top = bridges
+      .slice(0, 5)
+      .map((n) => `${n.name} (${n.program}, ${n.degree} co-authors)`);
+    return (
+      `Co-authorship network of ${net.data.nodes.length} cancer-center members across ` +
+      `${nPrograms} programs, connected by ${net.data.edges.length} shared-publication ties. ` +
+      (top.length ? `The most central bridge investigators are ${top.join("; ")}.` : "")
+    );
+  }, [net.data, bridges]);
 
   return (
     <>
@@ -80,6 +97,7 @@ export function Networks({ range }: { range: YearRange }) {
           </Card>
 
           <Card title="Co-authorship graph">
+            <p className="net-summary">{summary}</p>
             <div className="legend">
               {[...new Set(net.data.nodes.map((n) => n.program))].sort().map((p) => (
                 <span key={p} className="legend-item">
@@ -88,7 +106,16 @@ export function Networks({ range }: { range: YearRange }) {
                 </span>
               ))}
             </div>
-            <NetworkGraph data={net.data} colors={colors} />
+            <ErrorBoundary
+              fallback={
+                <div className="error">
+                  The interactive graph couldn’t be displayed in this browser. The bridge
+                  investigators are listed in the table above.
+                </div>
+              }
+            >
+              <NetworkGraph data={net.data} colors={colors} description={summary} />
+            </ErrorBoundary>
           </Card>
         </>
       )}
