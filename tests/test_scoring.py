@@ -29,8 +29,10 @@ def _works(tmp_path):
             ],
             # w3/w6 topics deliberately carry NO cancer term, so only the title
             # fires → the needs_review (agent) band.
-            "primary_topic": ["Cancer immunotherapy", "Kinase inhibitors", "Gene regulation networks",
-                              "Gout and urate", "Cosmology", "Immune cell signaling"],
+            "primary_topic": [
+                "Cancer immunotherapy", "Kinase inhibitors", "Gene regulation networks",
+                "Gout and urate", "Cosmology", "Immune cell signaling",
+            ],
             "topic_subfield": ["Oncology", "Oncology", "Molecular Biology",
                                "Rheumatology", "Astronomy and Astrophysics", "Immunology"],
             "topic_field": ["Medicine", "Medicine", "Biochemistry", "Medicine",
