@@ -200,6 +200,50 @@ def test_team_gap(client: TestClient):
     assert client.get("/api/team-gap").status_code == 422  # expertise required
 
 
+def test_find_member_resolves_name(client: TestClient):
+    from cu_openalex.cancer_center import queries as q
+
+    # pick a real resolved member, then resolve them back by (partial) name
+    known = q.run_sql(
+        "SELECT First_Name || ' ' || Last_Name AS name, Member_ID FROM members "
+        "WHERE author_id IS NOT NULL ORDER BY Member_ID LIMIT 1"
+    ).to_dicts()[0]
+    cands = q.find_member(known["name"].lower())
+    assert any(c["member_id"] == known["Member_ID"] for c in cands)
+    # resolved members rank ahead of unresolved
+    resolved_flags = [c["resolved"] for c in cands]
+    assert resolved_flags == sorted(resolved_flags, reverse=True)
+    assert q.find_member("zzzznotarealname") == []
+
+
+def test_collaborator_tool_handlers():
+    """The curated-tool dispatch resolves against real data without the LLM."""
+    from cu_openalex.cancer_center import collaborator as co
+    from cu_openalex.cancer_center import queries as q
+
+    top = q.find_experts("cancer", limit=1)[0]
+    mid = top["member_id"]
+    # each handler returns JSON-shaped results for the model
+    assert co._HANDLERS["find_member"]({"name": top["name"]})
+    experts = co._HANDLERS["find_experts"]({"query": "cancer", "limit": 5})
+    assert len(experts) <= 5 and all("n_relevant" in e for e in experts)
+    assert co._HANDLERS["member_expertise"]({"member_id": mid})["member"]["member_id"] == mid
+    gap = co._HANDLERS["team_gap"]({"needed_expertise": ["genomics"], "seed_members": [mid]})
+    assert gap["areas"][0]["query"] == "genomics"
+
+
+def test_collaborator_endpoint_unconfigured(client: TestClient, monkeypatch):
+    """Without a Gemini key the endpoint degrades to a well-formed error, not 500."""
+    from cu_openalex.cancer_center import collaborator as co
+
+    monkeypatch.setattr(co, "_api_key", lambda: None)
+    r = client.post("/api/collaborator", json={"question": "who works on KRAS?"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["error"] and body["answer"] == ""
+    assert body["tool_calls"] == [] and body["needs_clarification"] is False
+
+
 @requires_spine
 def test_member_links_endpoint(client: TestClient):
     from cu_openalex.cancer_center import queries as q

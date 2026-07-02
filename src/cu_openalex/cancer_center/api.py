@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import chat, networks
+from . import chat, collaborator, networks
 from . import queries as q
 from .programs import CURRENT_PROGRAMS
 
@@ -409,5 +409,39 @@ def ask(req: ChatRequest) -> ChatResponse:
         queries=result.queries,
         table=table,
         suggestions=result.suggestions,
+        error=result.error,
+    )
+
+
+# --- Collaborator agent (curated-tool function-calling) ---------------------
+
+
+class CollaboratorRequest(BaseModel):
+    question: str
+    history: list[dict] | None = None
+    model: str | None = None
+
+
+class CollaboratorResponse(BaseModel):
+    answer: str
+    tool_calls: list[dict] = []
+    needs_clarification: bool = False
+    error: str | None = None
+
+
+@app.post("/api/collaborator", response_model=CollaboratorResponse)
+def collaborate(req: CollaboratorRequest) -> CollaboratorResponse:
+    """Interactive collaborator/expertise agent over the curated tools.
+
+    Reasons over ``find_member`` / ``find_experts`` / ``member_expertise`` /
+    ``member_network`` / ``grants_in_area`` / ``team_gap``, asking a clarifying
+    question when the ask is ambiguous. ``tool_calls`` is the trail (for the UI /
+    eval); ``needs_clarification`` is True when the agent asked instead of
+    answering from data."""
+    result = collaborator.ask(req.question, history=req.history, model=req.model)
+    return CollaboratorResponse(
+        answer=result.answer,
+        tool_calls=result.tool_calls,
+        needs_clarification=result.needs_clarification,
         error=result.error,
     )

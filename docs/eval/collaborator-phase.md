@@ -41,10 +41,17 @@ candidates with rationale** + a **P01 team-composition** suggestion.
   For P01/U: per area, which seeds cover it + ranked candidates to fill the gap,
   annotated with existing connections to the seed team (cross-program aware).
 
-### Agent + UI (next)
-LLM orchestration (function-calling) over the tools with a clarifying-question loop;
-a conversational **collaborator panel** (or a mode on Ask). Evaluate each step with
-the harness member scenarios (`eval/researcher_questions.py`).
+### Agent + UI
+- **Agent — DONE** (`collaborator.py`, `POST /api/collaborator`). Gemini
+  function-calling over the curated tools **+ `find_member`** (name→id glue) with
+  a clarifying-question loop. Presents *people, never institutions*; annotates
+  existing ties; returns `needs_clarification` when it asks instead of answering.
+  Verified end-to-end on the member scenarios (KRAS expertise; collaborators-for-
+  Dr.-X with existing-tie annotation; P01 team via `team_gap`; ambiguous ask →
+  clarifies). Deterministic parts (handlers, `find_member`, graceful no-key path)
+  covered in `tests/test_api.py`.
+- **UI (next):** a conversational **collaborator panel** (or a mode on Ask)
+  rendering the ranked candidates + `tool_calls` trail; both identity modes.
 
 ## Decisions (locked)
 - **Include-and-annotate existing collaborators**, don't exclude them — an existing
@@ -75,7 +82,9 @@ FWCI **percentiles / % in top 1%/10%** — data confirmed (OpenAlex
 1. ~~Add the remaining tools (`member_expertise`, `member_network`,
    `grants_in_area`, `team_gap`) + endpoints.~~ **DONE** — all four curated tools
    + endpoints + `tests/test_api.py` coverage (same pattern as `find_experts`).
-2. Build the agent (clarifying-question loop) + collaborator UI panel. **← next**
+2. ~~Build the agent (clarifying-question loop).~~ **DONE**
+   (`collaborator.py` + `POST /api/collaborator`). Remaining: **collaborator UI
+   panel** rendering ranked candidates + the tool trail. **← next**
 3. In parallel: #2 percentiles.
 4. Redeploy to put `/api/experts` + the above on the live site.
 5. Evaluate with the Obscura harness (`python -m cu_openalex.eval --base-url …`).

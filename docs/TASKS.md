@@ -139,10 +139,12 @@ Live at https://insights.uccc.cancerdatasci.org (app tier + Google OIDC deployed
       (topic/gene search → ranked members; `relative_to` annotates existing
       connection, include-and-annotate not exclude). First curated collaborator tool.
 - [ ] **Collaborator agent** (see `docs/eval/collaborator-phase.md`):
-      curated tools **DONE** (`member_expertise`, `member_network`,
-      `grants_in_area`, `team_gap` + `/api/*` endpoints + tests) → next:
-      interactive clarifying-question agent → collaborator UI panel; both
-      identity modes (pick-a-member + login).
+      curated tools **DONE** (`find_member`, `member_expertise`,
+      `member_network`, `grants_in_area`, `team_gap` + `/api/*` endpoints +
+      tests); **agent DONE** (`collaborator.py` + `POST /api/collaborator` —
+      Gemini function-calling over the tools, clarifying-question loop,
+      people-not-institutions, existing-tie annotation) → next: collaborator UI
+      panel; both identity modes (pick-a-member + login).
 - [ ] **#2 metrics (parallel):** FWCI **percentiles / % top-1%/10%** (OpenAlex
       `citation_normalized_percentile`, ~81% coverage) — median + distribution;
       then iCite **APT / Cited-by-Clinical** (lake-query extension). Responsible

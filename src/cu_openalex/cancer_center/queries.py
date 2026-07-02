@@ -987,6 +987,34 @@ def find_experts(
     ).to_dicts()
 
 
+def find_member(name: str, *, limit: int = 10) -> list[dict]:
+    """Resolve a (partial) name to candidate members — the agent's name→id glue.
+
+    Matches ``name`` as a substring of ``First Last`` (case-insensitive), so the
+    collaborator agent can turn "Dr. Fry" / "terry fry" into a ``member_id`` for
+    ``find_experts(relative_to=…)`` or ``team_gap(seed_members=[…])``. Resolved
+    members (with an OpenAlex author) rank first, then by publication volume so
+    the most likely intended person leads.
+    """
+    like = f"%{name.lower()}%"
+    return run_params(
+        """
+        SELECT m.Member_ID AS member_id,
+               m.First_Name || ' ' || m.Last_Name AS name,
+               m.PrimaryProgram AS program, m.FacultyRank AS rank,
+               (m.author_id IS NOT NULL) AS resolved,
+               count(DISTINCT mw.work_id) AS publications
+        FROM members m
+        LEFT JOIN member_works mw ON mw.member_id = m.Member_ID
+        WHERE lower(m.First_Name || ' ' || m.Last_Name) LIKE ?
+        GROUP BY ALL
+        ORDER BY resolved DESC, publications DESC, name
+        LIMIT ?
+        """,
+        [like, int(limit)],
+    ).to_dicts()
+
+
 def member_expertise(
     member_id: int, min_year: int | None = None, max_year: int | None = None
 ) -> dict:
