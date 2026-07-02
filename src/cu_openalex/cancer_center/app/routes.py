@@ -7,14 +7,38 @@ surface.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import RedirectResponse
+from typing import Literal
 
-from . import auth, identity
+from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi.responses import RedirectResponse
+from pydantic import BaseModel, Field
+
+from . import auth, identity, profiles
+from . import roles as R
 from .config import get_app_config
 from .db import get_pool
 
 router = APIRouter(prefix="/api")
+
+# Dependency: require a logged-in member (built once, reused).
+require_member = auth.require_role(R.MEMBER)
+
+
+class LinkItem(BaseModel):
+    label: str = Field(max_length=100)
+    url: str = Field(max_length=500)
+
+
+class ProfileUpdate(BaseModel):
+    bio: str | None = Field(default=None, max_length=5000)
+    keywords: list[str] = Field(default_factory=list, max_length=30)
+    links: list[LinkItem] = Field(default_factory=list, max_length=20)
+    photo_url: str | None = Field(default=None, max_length=500)
+
+
+class CorrectionRequest(BaseModel):
+    work_id: str = Field(max_length=100)
+    action: Literal["claim", "disclaim"]
 
 
 @router.get("/auth/login")
@@ -59,3 +83,57 @@ async def app_health() -> dict:
     async with get_pool().connection() as con:
         n = (await (await con.execute("SELECT count(*) FROM app_user")).fetchone())[0]
     return {"status": "ok", "app_users": n}
+
+
+# --- Editable profiles + publication corrections (ADR-0026) -----------------
+
+
+@router.get("/profile/{member_id}")
+async def get_profile(member_id: int) -> dict:
+    """The member-editable overlay profile (empty shell if unset)."""
+    profile = await profiles.get_profile(get_pool(), member_id)
+    return profile or {
+        "member_id": member_id,
+        "bio": None,
+        "keywords": [],
+        "links": [],
+        "photo_url": None,
+        "updated_at": None,
+    }
+
+
+@router.put("/profile")
+async def update_profile(body: ProfileUpdate, user: dict = Depends(require_member)) -> dict:
+    """Update the logged-in member's own profile."""
+    if user["member_id"] is None:
+        raise HTTPException(status_code=403, detail="no linked member record")
+    return await profiles.upsert_profile(
+        get_pool(),
+        member_id=user["member_id"],
+        updated_by=user["user_id"],
+        bio=body.bio,
+        keywords=body.keywords,
+        links=[link.model_dump() for link in body.links],
+        photo_url=body.photo_url,
+    )
+
+
+@router.post("/profile/corrections")
+async def add_correction(body: CorrectionRequest, user: dict = Depends(require_member)) -> dict:
+    """Claim or disclaim a publication as the logged-in member (the audit signal)."""
+    if user["member_id"] is None:
+        raise HTTPException(status_code=403, detail="no linked member record")
+    await profiles.set_correction(
+        get_pool(),
+        member_id=user["member_id"],
+        work_id=body.work_id,
+        action=body.action,
+        created_by=user["user_id"],
+    )
+    return {"ok": True}
+
+
+@router.get("/profile/{member_id}/corrections")
+async def get_corrections(member_id: int) -> list[dict]:
+    """A member's publication claim/disclaim corrections."""
+    return await profiles.list_corrections(get_pool(), member_id)

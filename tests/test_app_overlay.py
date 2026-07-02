@@ -73,3 +73,64 @@ async def test_ensure_user_resolves_member_and_role(pool):
 async def test_resolve_member_by_email_unknown_is_none(pool):
     # A clearly-unmatched email resolves to None (the claim-flow case).
     assert identity.resolve_member_by_email("definitely-nobody-xyz@cuanschutz.edu") is None
+
+
+async def test_profile_upsert_and_read(pool):
+    from cu_openalex.cancer_center.app import profiles
+
+    mid = 999999001  # synthetic member id, cleaned up below
+    async with pool.connection() as con:
+        await con.execute("DELETE FROM profile WHERE member_id = %s", (mid,))
+    try:
+        p = await profiles.upsert_profile(
+            pool,
+            member_id=mid,
+            updated_by=None,
+            bio="Studies X.",
+            keywords=["oncology", "genomics"],
+            links=[{"label": "Lab", "url": "https://example.edu"}],
+            photo_url=None,
+        )
+        assert p["bio"] == "Studies X."
+        assert p["keywords"] == ["oncology", "genomics"]
+        assert p["links"] == [{"label": "Lab", "url": "https://example.edu"}]
+        # upsert overwrites
+        p2 = await profiles.upsert_profile(
+            pool,
+            member_id=mid,
+            updated_by=None,
+            bio="Updated.",
+            keywords=[],
+            links=[],
+            photo_url="https://example.edu/p.jpg",
+        )
+        assert p2["bio"] == "Updated." and p2["keywords"] == [] and p2["links"] == []
+        assert p2["photo_url"] == "https://example.edu/p.jpg"
+    finally:
+        async with pool.connection() as con:
+            await con.execute("DELETE FROM profile WHERE member_id = %s", (mid,))
+
+
+async def test_corrections_upsert_and_list(pool):
+    from cu_openalex.cancer_center.app import profiles
+
+    mid = 999999002
+    async with pool.connection() as con:
+        await con.execute("DELETE FROM pub_correction WHERE member_id = %s", (mid,))
+    try:
+        await profiles.set_correction(
+            pool, member_id=mid, work_id="W1", action="disclaim", created_by=None
+        )
+        # same (member, work) updates in place, not duplicates
+        await profiles.set_correction(
+            pool, member_id=mid, work_id="W1", action="claim", created_by=None
+        )
+        await profiles.set_correction(
+            pool, member_id=mid, work_id="W2", action="claim", created_by=None
+        )
+        rows = await profiles.list_corrections(pool, mid)
+        by_work = {r["work_id"]: r["action"] for r in rows}
+        assert by_work == {"W1": "claim", "W2": "claim"}
+    finally:
+        async with pool.connection() as con:
+            await con.execute("DELETE FROM pub_correction WHERE member_id = %s", (mid,))

@@ -93,9 +93,12 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
       `leadership` / `admin` / viewer default) + `require_role` dependency
 - [ ] First-login claim/link UI for the roster-email≠login-email case (backend
       link-preservation is in; the member-facing claim flow is pending)
-- [ ] Editable member profiles (bio/photo/keywords/links) + publication
-      claim/disclaim corrections; "connect ORCID" upgrades match confidence;
-      snapshot⊕overlay read-time merge onto `member_profile`
+- [x] Editable member profiles **backend**: overlay-backed `profile` (bio/photo/
+      keywords/links) + `pub_correction` claim/disclaim; `GET /api/profile/{id}`
+      (public) + role-gated `PUT /api/profile`, `POST /api/profile/corrections`
+- [ ] Profile **frontend**: login button + `useMe`, an edit form on the member's
+      own profile, and the read-time merge (fetch analytics + overlay, render both);
+      "connect ORCID" upgrades match confidence
 - [ ] Enable the app tier in the deploy: install the `app` extra in the API image,
       set `UCCC_APP_BASE_URL`, register the OIDC callback, add ADC/secrets access
 - [ ] Phase 2 (later) auth: one-time magic key to the **registered roster email**
