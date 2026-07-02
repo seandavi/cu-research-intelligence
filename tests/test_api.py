@@ -64,6 +64,19 @@ def test_top_topics_validates_field_level(client: TestClient):
     assert client.get("/api/top-topics?field_level=bogus").status_code == 422
 
 
+def test_kpi_carries_citation_percentile(client: TestClient):
+    """Responsible field-normalized strength metric: median + %top, not a bare mean."""
+    k = client.get("/api/kpi").json()
+    assert {"median_percentile", "pct_top_1", "pct_top_10", "n_with_percentile"} <= set(k)
+    # shares are bounded and ordered (top-1% is a subset of top-10%)
+    assert 0 <= k["pct_top_1"] <= k["pct_top_10"] <= 100
+    assert 0 <= k["median_percentile"] <= 1
+    assert k["n_with_percentile"] > 0  # ~94% coverage in the curated works
+    # per-program strengths carry the same distribution fields
+    progs = client.get("/api/program-summary").json()
+    assert all("median_percentile" in p and "pct_top_10" in p for p in progs)
+
+
 # --- Membership spine (ADR-0025) --------------------------------------------
 
 requires_spine = pytest.mark.skipif(

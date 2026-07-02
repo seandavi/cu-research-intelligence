@@ -185,6 +185,17 @@ def kpi_summary(min_year: int | None = None, max_year: int | None = None) -> dic
             round(median(fwci), 2) AS median_fwci,
             round(median(rcr), 2) AS median_rcr,
             count(rcr) AS n_with_rcr,
+            -- Field/year-normalized citation percentile (OpenAlex). Reported as a
+            -- distribution (median + %top), never a bare mean — the responsible
+            -- "what are we strongest in" measure. NULL-safe: shares are over works
+            -- that HAVE a percentile (~94% coverage), exposed as n_with_percentile.
+            round(median(citation_percentile), 3) AS median_percentile,
+            count(citation_percentile) AS n_with_percentile,
+            round(100.0 * avg(is_top_1_pct::int) FILTER (WHERE citation_percentile IS NOT NULL), 1)
+                AS pct_top_1,
+            round(100.0 * avg(is_top_10_pct::int) FILTER (WHERE citation_percentile IS NOT NULL), 1)
+                AS pct_top_10,
+            count(*) FILTER (WHERE is_top_10_pct) AS n_top_10,
             round(100.0 * avg(is_oa::int), 1) AS pct_open_access,
             round(100.0 * avg((collaboration_class != 'solo')::int), 1) AS pct_collaborative,
             count(*) FILTER (WHERE collaboration_class != 'solo') AS n_collaborative,
@@ -272,6 +283,7 @@ def program_summary(
         f"""
         WITH exploded AS (
             SELECT w.work_id, w.publication_year, w.cited_by_count, w.fwci, w.rcr,
+                   w.citation_percentile, w.is_top_10_pct,
                    w.is_inter_program, w.is_intra_program,
                    UNNEST(w.programs) AS program
             FROM works w WHERE {yc}
@@ -281,6 +293,9 @@ def program_summary(
                sum(cited_by_count)::BIGINT AS citations,
                round(avg(fwci), 2) AS mean_fwci,
                round(median(rcr), 2) AS median_rcr,
+               round(median(citation_percentile), 3) AS median_percentile,
+               round(100.0 * avg(is_top_10_pct::int)
+                     FILTER (WHERE citation_percentile IS NOT NULL), 1) AS pct_top_10,
                round(100.0 * avg(is_inter_program::int), 1) AS pct_inter_program,
                round(100.0 * avg(is_intra_program::int), 1) AS pct_intra_program
         FROM exploded WHERE program IS NOT NULL {prog_filter}
@@ -704,6 +719,9 @@ def member_profile(
                sum(mw.cited_by_count)::BIGINT AS citations,
                round(avg(mw.fwci), 2) AS mean_fwci,
                round(median(mw.rcr), 2) AS median_rcr,
+               round(median(mw.citation_percentile), 3) AS median_percentile,
+               round(100.0 * avg(mw.is_top_10_pct::int)
+                     FILTER (WHERE mw.citation_percentile IS NOT NULL), 1) AS pct_top_10,
                round(100.0 * avg(mw.is_oa::int), 1) AS pct_open_access
         FROM member_works mw WHERE mw.member_id = {member_id} AND {yc}
         """

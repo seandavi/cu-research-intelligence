@@ -86,6 +86,14 @@ def main() -> None:
                 "Field-weighted citation impact of the typical paper "
                 "(1.0 = world average). Median; mean is skewed by a few outliers.",
             ),
+            (
+                "Top 10% of field",
+                f"{k['pct_top_10']:.0f}%" if k.get("pct_top_10") is not None else "—",
+                "Share of publications in the top 10% most-cited for their field & "
+                f"year (OpenAlex citation percentile; {shared.fmt_int(k.get('pct_top_1'))}% "
+                f"in the top 1%). {shared.fmt_int(k.get('n_with_percentile'))} scored — "
+                "a distribution-based strength measure, not a bare average.",
+            ),
             ("Open access", f"{k['pct_open_access']:.0f}%", "Share of publications that are OA"),
             (
                 "Collaborative",

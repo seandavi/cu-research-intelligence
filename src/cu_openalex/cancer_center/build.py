@@ -225,6 +225,27 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
             GROUP BY work_id
             """
         )
+        # OpenAlex citation_normalized_percentile (field-and-year-normalized rank):
+        # value in [0,1] (higher = more cited for its field/year), plus the
+        # is_in_top_{1,10}_percent flags. Pulled from raw like abstracts/issues
+        # (not in the curated openalex layer); deduped to the LATEST update so we
+        # take OpenAlex's current value (older snapshots carry NULL here). Drives
+        # the responsible "what are we strongest in" distribution (median + %top).
+        con.execute(
+            f"""
+            CREATE TABLE percentile_lookup AS
+            SELECT work_id,
+                   CAST(json_extract(cnp, '$.value') AS DOUBLE) AS citation_percentile,
+                   CAST(json_extract(cnp, '$.is_in_top_1_percent') AS BOOLEAN) AS is_top_1_pct,
+                   CAST(json_extract(cnp, '$.is_in_top_10_percent') AS BOOLEAN) AS is_top_10_pct
+            FROM (
+                SELECT work_id, updated_date,
+                       json_extract(raw_json, '$.citation_normalized_percentile') AS cnp
+                FROM '{_RAW_WORKS_GLOB}'
+            ) r JOIN cc_workids c USING (work_id)
+            QUALIFY row_number() OVER (PARTITION BY work_id ORDER BY updated_date DESC) = 1
+            """
+        )
         # Reconstruct abstract text from OpenAlex's abstract_inverted_index
         # ({word: [positions]}) for full-text search (~64% of works have one).
         con.execute("INSTALL json; LOAD json;")
@@ -261,6 +282,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                    (w.title ILIKE 'Abstract %' OR lower(il.issue) LIKE '%suppl%')
                        AS is_meeting_abstract,
                    rc.rcr, rc.nih_percentile, ab.abstract,
+                   pl.citation_percentile, pl.is_top_1_pct, pl.is_top_10_pct,
                    COALESCE(ia.n_institutions, 0) AS n_institutions,
                    COALESCE(ia.has_external_collab, FALSE) AS has_external_collab,
                    COALESCE(ia.is_international, FALSE) AS is_international
@@ -268,6 +290,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
             JOIN cc_workids c USING (work_id)
             LEFT JOIN issue_lookup il USING (work_id)
             LEFT JOIN abstract_lookup ab USING (work_id)
+            LEFT JOIN percentile_lookup pl USING (work_id)
             LEFT JOIN doi_pmid dp
                 ON dp.doi = regexp_replace(lower(w.doi), '^https?://(dx\\.)?doi\\.org/', '')
             LEFT JOIN rcr_cw rc
@@ -283,7 +306,8 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
             COPY (
                 SELECT wa.member_id, wa.author_id, wa.program, wa.confidence,
                        w.work_id, w.publication_year, w.cited_by_count, w.fwci,
-                       m.rcr, w.is_oa, w.type,
+                       m.rcr, m.citation_percentile, m.is_top_1_pct, m.is_top_10_pct,
+                       w.is_oa, w.type,
                        (w.type IN {pub_types} AND NOT m.is_meeting_abstract) AS is_publication,
                        w.primary_topic, w.topic_field,
                        w.topic_subfield, w.source_name
@@ -328,6 +352,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
                 SELECT w.work_id, w.title, m.abstract, w.publication_year, w.publication_date,
                        w.doi, m.pmid_final AS pmid, w.pmcid, w.type,
                        w.cited_by_count, w.fwci, m.rcr, m.nih_percentile,
+                       m.citation_percentile, m.is_top_1_pct, m.is_top_10_pct,
                        w.is_oa, w.oa_status, w.is_retracted,
                        w.primary_topic, w.topic_subfield, w.topic_field, w.topic_domain,
                        w.source_name, w.source_id, w.funder_ids,
