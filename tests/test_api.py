@@ -105,6 +105,22 @@ def test_member_profile_carries_spine(client: TestClient):
     assert any(lc["link_type"] == "coauthorship" for lc in spine["link_counts"])
 
 
+def test_experts_finder(client: TestClient):
+    r = client.get("/api/experts?q=cancer&limit=10")
+    assert r.status_code == 200
+    experts = r.json()
+    assert experts and all("n_relevant" in e and "name" in e for e in experts)
+    # ranked by relevant output, descending
+    counts = [e["n_relevant"] for e in experts]
+    assert counts == sorted(counts, reverse=True)
+    # excluding a member drops them from the results (find-new-collaborators mode)
+    top = experts[0]["member_id"]
+    excluded = client.get(f"/api/experts?q=cancer&exclude_member={top}&limit=10").json()
+    assert all(e["member_id"] != top for e in excluded)
+    # too-short query is rejected
+    assert client.get("/api/experts?q=a").status_code == 422
+
+
 @requires_spine
 def test_member_links_endpoint(client: TestClient):
     from cu_openalex.cancer_center import queries as q
