@@ -64,7 +64,8 @@ docker compose up -d --build
 `serving.duckdb` automatically. Run `reporter` **before** `build` so the grants
 mart is included in the bake (or run `python -m cu_openalex.cancer_center.bake`
 again afterward). The lake is only touched here, on the host — the API image
-installs only the `api` extra (no `cdsci-lake`) and runs fully offline. That
+installs the `api` + `app` extras (no `cdsci-lake`) and runs fully offline; the
+app-tier secrets are injected as env, not fetched at runtime (see below). That
 builds both images and starts the stack; the router is picked up from the `web`
 service's Traefik labels — no Traefik restart needed.
 
@@ -116,6 +117,59 @@ GEMINI_API_KEY=...
 
 Then `docker compose up -d`. Without the key, every other endpoint still works;
 only `/api/chat` is disabled.
+
+**Enable the application backend — Google OIDC auth + editable profiles**
+(ADR-0026). The `api` image already includes the `app` extra; the tier stays
+dormant until an overlay DB password is present. Turn it on in four steps:
+
+1. **Register the OIDC redirect URI.** In the Google Cloud console for the OAuth
+   client (`cancerdatasci-oauth-*`), add this exact authorized redirect URI:
+
+   ```
+   https://insights.uccc.cancerdatasci.org/api/auth/callback
+   ```
+
+   Login is restricted server-side to the `cuanschutz.edu` hosted domain.
+
+2. **Inject the secrets as env** (resolved from GSM on the host; the runtime
+   container never contacts GSM). Append them to the deploy `.env` (gitignored):
+
+   ```bash
+   gcloud auth login                                   # secret-accessor on cdsci-infra
+   bash scripts/fetch-app-secrets.sh >> .env           # DB pw + OIDC client + session key
+   echo 'UCCC_APP_ADMIN_EMAILS=sean.2.davis@cuanschutz.edu' >> .env  # seed the first admin
+   ```
+
+3. **Give the `api` container a route to the overlay Postgres.** The shared
+   Postgres binds `localhost` on the host, so the compose default
+   (`host.docker.internal` via `extra_hosts: host-gateway`) reaches it **only** if
+   you also make Postgres listen on the docker bridge. The robust path is to attach
+   `api` to the Postgres container's docker network and point at its **service
+   name**:
+
+   ```yaml
+   # docker-compose.yml — api service
+   networks: [internal, pg]
+   environment:
+     UCCC_APP_DB_HOST: <postgres-service-name>
+   # ...and add `pg: { external: true, name: <postgres-network> }` under networks:
+   ```
+
+   The overlay is the dedicated `uccc_app` database + role (provisioned separately;
+   **not** the shared `lake` catalog). If the overlay is unreachable the app tier
+   degrades to disabled and the read-only analytics API keeps serving.
+
+4. **Deploy:** `docker compose up -d --build`. Verify:
+
+   ```bash
+   curl -sS https://insights.uccc.cancerdatasci.org/api/app/health   # {"status":"ok",...}
+   curl -sSI https://insights.uccc.cancerdatasci.org/api/auth/login  # 302 → accounts.google.com
+   ```
+
+   Then sign in at `/api/auth/login`; the admin email above is granted the `admin`
+   role on first login. The public analytics stay open; only the write/auth routes
+   sit behind the session. To fully disable the tier, leave `UCCC_APP_DB_PASSWORD`
+   unset — the API serves read-only analytics exactly as before.
 
 **Gate behind auth** (recommended for the EAB/leadership audience). Uncomment the
 middleware label in `docker-compose.yml` and apply:
