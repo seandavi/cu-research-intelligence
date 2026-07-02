@@ -318,14 +318,15 @@ def org_units() -> list[dict]:
 def experts(
     q_: str = Query(..., alias="q", min_length=2, max_length=100),
     program: str | None = None,
-    exclude_member: int | None = None,
+    relative_to: int | None = None,
     limit: int = Query(25, ge=1, le=100),
 ) -> list[dict]:
     """Find members with expertise in a topic/gene/keyword, ranked by relevant output.
 
-    ``exclude_member`` drops that member + their current co-authors (the "find new
-    collaborators for me" case). The curated base tool for the collaborator agent."""
-    return q.find_experts(q_, program=program, exclude_member=exclude_member, limit=limit)
+    ``relative_to`` (a member id) annotates each result with the existing connection
+    to that member (shared papers/grants, existing_collaborator) rather than
+    excluding — the base tool for the collaborator agent."""
+    return q.find_experts(q_, program=program, relative_to=relative_to, limit=limit)
 
 
 # --- Chat (NL → read-only SQL) ----------------------------------------------

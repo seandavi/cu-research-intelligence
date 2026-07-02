@@ -113,10 +113,11 @@ def test_experts_finder(client: TestClient):
     # ranked by relevant output, descending
     counts = [e["n_relevant"] for e in experts]
     assert counts == sorted(counts, reverse=True)
-    # excluding a member drops them from the results (find-new-collaborators mode)
+    # relative_to annotates the existing connection (and excludes self), never drops others
     top = experts[0]["member_id"]
-    excluded = client.get(f"/api/experts?q=cancer&exclude_member={top}&limit=10").json()
-    assert all(e["member_id"] != top for e in excluded)
+    annotated = client.get(f"/api/experts?q=cancer&relative_to={top}&limit=10").json()
+    assert all(e["member_id"] != top for e in annotated)  # self excluded
+    assert all("existing_collaborator" in e for e in annotated)  # connection annotated
     # too-short query is rejected
     assert client.get("/api/experts?q=a").status_code == 422
 
