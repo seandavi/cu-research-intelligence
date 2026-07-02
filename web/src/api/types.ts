@@ -182,6 +182,56 @@ export interface InterInstTrendRow {
   publications: number;
 }
 
+// Membership spine (ADR-0025) detail carried on the member profile.
+export interface MemberIdentifier {
+  id_type: string;
+  id_value: string;
+  source: string;
+  is_primary: boolean;
+}
+
+export interface MemberMembership {
+  snapshot_date: string;
+  program: string | null;
+  short_code: string | null;
+  member_type: string | null;
+  member_status: string | null;
+  status_date: string | null;
+  member_type_start_date: string | null;
+  applied_date: string | null;
+  is_active: boolean;
+}
+
+export interface LifecycleEvent {
+  event_type: string;
+  event_date: string;
+  detail: string | null;
+}
+
+export interface LinkCount {
+  link_type: string;
+  n: number;
+  total_weight: number;
+}
+
+export interface MemberSpine {
+  identifiers: MemberIdentifier[];
+  membership: MemberMembership[];
+  appointment: { faculty_rank: string | null; org_path: string | null };
+  lifecycle: LifecycleEvent[];
+  link_counts: LinkCount[];
+}
+
+export interface MemberLink {
+  other_member_id: number;
+  other_name: string | null;
+  other_program: string | null;
+  link_type: string;
+  weight: number;
+  min_year: number;
+  max_year: number;
+}
+
 export interface MemberProfile {
   member: {
     member_id: number;
@@ -208,6 +258,7 @@ export interface MemberProfile {
   top_journals: { journal: string; publications: number }[];
   top_coauthors: { member_id: number; name: string; program: string; shared: number }[];
   grants: MemberGrant[];
+  spine: MemberSpine | null;
 }
 
 export interface NetworkNode {

@@ -72,6 +72,13 @@ export const useMemberProfile = (id: number | undefined, r?: YearRange) =>
     enabled: !!r && id !== undefined,
   });
 
+export const useMemberLinks = (id: number | undefined, linkType?: string) =>
+  useQuery({
+    queryKey: key("member_links", undefined, `${id}:${linkType ?? ""}`),
+    queryFn: () => api.memberLinks(id!, linkType),
+    enabled: id !== undefined,
+  });
+
 export const useNetwork = (r?: YearRange, minShared = 2, program?: string) =>
   useQuery({
     queryKey: key("network", r, `${minShared}:${program ?? ""}`),

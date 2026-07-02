@@ -11,6 +11,7 @@ import type {
   InterInstTrendRow,
   Kpi,
   MatrixCell,
+  MemberLink,
   MemberProfile,
   MemberRow,
   Meta,
@@ -54,6 +55,8 @@ export const api = {
     get<ProgramCombination[]>("/program-combinations", { ...yr(r), current_only: currentOnly }),
   members: (r?: YearRange) => get<MemberRow[]>("/members", yr(r)),
   member: (id: number, r?: YearRange) => get<MemberProfile>(`/member/${id}`, yr(r)),
+  memberLinks: (id: number, linkType?: string) =>
+    get<MemberLink[]>(`/member/${id}/links`, { link_type: linkType }),
   publications: async (f: PublicationFilters): Promise<PublicationResults> => {
     const qs = new URLSearchParams();
     const set = (k: string, v: unknown) => {
