@@ -31,11 +31,15 @@ candidates with rationale** + a **P01 team-composition** suggestion.
   `GET /api/experts`). Members matching a topic/gene/keyword, ranked by relevant
   output. `relative_to` **annotates the existing connection** (shared papers/grants,
   `existing_collaborator`) — **include-and-annotate, not exclude** (decision below).
-- `member_expertise(member_id)` — a member's top topics/genes (reuse profile top_topics).
-- `member_network(member_id)` — existing co-authors/co-grant (from `member_link`).
-- `grants_in_area(query)` — who is funded there (`member_grants.project_title`).
-- `team_gap(needed_expertise[], seed_members[])` — for P01/U: cover the needed
-  expertise areas, suggest complementary members (cross-program aware).
+- **`member_expertise(member_id)` — DONE** (`GET /api/member/{id}/expertise`).
+  A member's top primary topics + broad fields — the inverse of `find_experts`.
+- **`member_network(member_id)` — DONE** (`GET /api/member/{id}/network`).
+  Existing co-authors/co-grant pivoted one-row-per-member (from `member_link`).
+- **`grants_in_area(query)` — DONE** (`GET /api/grants-in-area`). Grants whose
+  title matches, with the funded cc members + contact-PI flag.
+- **`team_gap(needed_expertise[], seed_members[])` — DONE** (`GET /api/team-gap`).
+  For P01/U: per area, which seeds cover it + ranked candidates to fill the gap,
+  annotated with existing connections to the seed team (cross-program aware).
 
 ### Agent + UI (next)
 LLM orchestration (function-calling) over the tools with a clarifying-question loop;
@@ -68,9 +72,10 @@ FWCI **percentiles / % in top 1%/10%** — data confirmed (OpenAlex
 (needs a lake-query extension).
 
 ## Where to resume
-1. Add the remaining tools (`member_expertise`, `member_network`, `grants_in_area`,
-   `team_gap`) + endpoints — same curated pattern as `find_experts`.
-2. Build the agent (clarifying-question loop) + collaborator UI panel.
+1. ~~Add the remaining tools (`member_expertise`, `member_network`,
+   `grants_in_area`, `team_gap`) + endpoints.~~ **DONE** — all four curated tools
+   + endpoints + `tests/test_api.py` coverage (same pattern as `find_experts`).
+2. Build the agent (clarifying-question loop) + collaborator UI panel. **← next**
 3. In parallel: #2 percentiles.
 4. Redeploy to put `/api/experts` + the above on the live site.
 5. Evaluate with the Obscura harness (`python -m cu_openalex.eval --base-url …`).
