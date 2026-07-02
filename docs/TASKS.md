@@ -36,6 +36,80 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 - [ ] Concurrency: parallelize the works date-group scans within the daily/total
       OpenAlex etiquette limits if backfill is too slow serially
 
+## Milestone 3 — Membership spine (ADR-0025, todo)
+
+- [ ] Build the normalized membership marts in `docs/membership_data_model.md`
+      from the roster (`member`, `member_identifier`, `program` +
+      `program_code_alias`, `membership` (snapshot-grained), `member_lifecycle_event`,
+      `org_unit`, `member_appointment`, `faculty_rank`) — additive to the existing
+      flat `members.py` load / `members.parquet` crosswalk, not a replacement
+- [ ] `research_interest_group` + `rig_signup`: load the 65-row RIG form, match
+      to `member` by name/email, record `match_method` (only ~23/65 exact-match)
+- [ ] `roster_snapshot` + `roster_snapshot_member`: load the 284-row "Active
+      Cancer Center Membership" + CPC "Publishing Members" cuts as validation
+      evidence; report status/program drift vs the authoritative roster
+- [ ] `member_link` spine table: reshape `networks.member_coauthorship_edges`
+      (coauthorship, built) + derive `cogrant` from `member_grants` shared
+      `core_project_num`; leave `cocitation`/`biblio_coupling` blocked on the item below
+
+## Milestone 4 — Catchment relevance (ADR-0024, todo)
+
+- [ ] Build `catchment/build.py`: load `cc-data/raw/` into the curated tables
+      in `docs/catchment_relevance_design.md` (`catchment_candidate`,
+      `catchment_review`, `catchment_review_tag`, `ovid_citation`, etc.)
+- [ ] Adapt `cc-data/derived/automation_poc/stage1_extract_candidates.sql` off
+      its placeholder `lake` schema onto this repo's actual cdsci-lake tables
+      (MeSH source TBD — check if PubMed/MeSH is already in the lake)
+- [ ] Re-run `stage2_classify.py` (or a port of it) against
+      `catchment_review`/`catchment_review_tag` as the gold set to validate
+      before trusting counts on any program beyond CPC/DT/THI
+- [ ] Deliverable A: cancer-relevance classifier for the full (non-cohort)
+      OpenAlex works corpus
+- [ ] Deliverable B: catchment-relevance classifier at cohort scale, writing
+      `pub_classification`; once validated, surface `is_catchment_relevant` on
+      `cancer_center/works.parquet` parallel to `is_publication`
+- [ ] Co-citation / bibliographic-coupling member-linking (needs
+      `referenced_works` curated from raw OpenAlex works — currently only in
+      raw JSON, not the curated projection). Unlocks the `cocitation` +
+      `biblio_coupling` edge types of the membership spine's `member_link`
+      (ADR-0025)
+
+## Milestone 5 — Application backend + auth (ADR-0026, todo)
+
+- [ ] Stand up the Postgres overlay in the compose stack (identity, sessions,
+      profiles, corrections, review) beside the read-only `serving.duckdb`;
+      implement the snapshot⊕overlay read-time merge pattern (one impl, reused)
+- [ ] Split FastAPI into read / app / scoring routers in one app; keep the public
+      analytics routes open, gate the app routes behind a session
+- [ ] Phase 1 auth: Google OIDC restricted to the CU Anschutz tenant; app-tier
+      session cookie; resolve login email → `Member_ID` via `member_identifier`
+      (ADR-0025) with a first-login claim/link flow + admin override
+- [ ] Role model + gating (`member` / `liaison` / `program_leader` / `librarian` /
+      `leadership` / `admin` / `viewer`), seeded from roster + admin assignment
+- [ ] Editable member profiles (bio/photo/keywords/links) + publication
+      claim/disclaim corrections; "connect ORCID" upgrades match confidence
+- [ ] Phase 2 (later) auth: one-time magic key to the **registered roster email**
+      (single-use, short-TTL, rate-limited) for external/individual members
+- [ ] Visibility model (public / member-only / leadership fields) so roster PII
+      never reaches a public response; security pass on the new write surface
+- [ ] Test fixture `serving.duckdb` for `queries.py` before it grows auth/write
+      neighbors; add CI (pytest + ruff + `tsc`)
+
+## Milestone 6 — Cancer-relevance & catchment scoring spine (ADR-0027, todo)
+
+- [ ] Cancer-relevance classifier over the **full ~1.17M-work corpus**
+      (`is_cancer_relevant`); cascade the catchment classifier onto only the
+      cancer-relevant slice (builds on Milestone 4)
+- [ ] One `classify()` core, three entrypoints: batch (Prefect, resumable),
+      on-demand (app route, incl. pre-publication manuscript entry), HITL re-score
+- [ ] Merge + precedence for `pub_classification` (human > model, latest wins,
+      model provisional until the program is benchmarked); additive versioned runs
+- [ ] HITL review loop (optional, role-gated): `review_task` queue + review screen;
+      triggers = low/med confidence, model disagreement, high-confidence audit
+      sample, new manuscripts; per-program calibration gate before auto-trust
+- [ ] Surface `is_catchment_relevant` on `works.parquet` and member profiles once
+      a program is validated; manuscript manual-entry UI (the one new ingest path)
+
 ## Backlog / ideas
 
 - [ ] Compact the append-only `ingested_run` history; partition retention policy
