@@ -25,7 +25,7 @@ The platform is judged on **both** halves, and the harness covers both:
 | **Content — NL→SQL chat** | backend | Gold-set eval (relevancy, faithfulness/groundedness, schema-validity, transparency-of-query, safe-refusal) | LLM judge vs. gold Q/SQL | curated gold answers |
 | **API contract + capability coverage** | backend | Probe endpoints; assert invariants; score each stage-2 requirement present/partial/absent | deterministic | requirements (`02`) |
 | **Heuristics — each page** | UI/UX | Rubric scoring (Nielsen-10 + Few + viz-honesty + responsible-metrics rules from `04`) with 0–4 severity + evidence | LLM/MLLM judge over DOM+screenshot | human calibration set |
-| **Tasks — persona × job** | UI/UX | Goal-driven walkthroughs (success, steps, deviations) | persona "simulated user" driving the live SPA (Playwright) | human calibration set |
+| **Tasks — persona × job** | UI/UX | Goal-driven walkthroughs (success, steps, deviations) | persona "simulated user" driving the live SPA (Obscura) | human calibration set |
 | **Trust/satisfaction** | UI/UX | SUS, 4-item viz-trust inventory, calibrated-trust probes | (human survey; agents seed probes) | humans |
 | **Compliance** | both | Automated checks of `04`'s presentation rules (distribution? normalized? provenance label? caveat? no JIF/h-index?) | deterministic + judge | rules |
 

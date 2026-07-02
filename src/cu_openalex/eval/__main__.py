@@ -16,6 +16,7 @@ from pathlib import Path
 from .capabilities import api_contract_checks, capability_coverage
 from .content_eval import run_content_eval
 from .scorecard import summarize, to_markdown
+from .ui_eval import ui_checks
 
 
 def main() -> None:
@@ -23,11 +24,13 @@ def main() -> None:
     parser.add_argument("--base-url", default="http://localhost:8000")
     parser.add_argument("--out", default=".", help="Directory for scorecard.json/.md")
     parser.add_argument("--skip-chat", action="store_true", help="Skip the (slow) chat eval")
+    parser.add_argument("--skip-ui", action="store_true", help="Skip the Obscura UI eval")
     args = parser.parse_args()
 
     content = [] if args.skip_chat else run_content_eval(args.base_url)
     caps = api_contract_checks(args.base_url) + capability_coverage(args.base_url)
-    summary = summarize(content, caps)
+    ui = [] if args.skip_ui else ui_checks(args.base_url)
+    summary = summarize(content, caps, ui)
 
     out = Path(args.out)
     (out / "scorecard.json").write_text(json.dumps(summary, indent=2))

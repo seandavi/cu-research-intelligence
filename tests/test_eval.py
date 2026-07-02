@@ -50,6 +50,36 @@ def test_evaluate_negative_control_refused():
     ).refusal_ok
 
 
+def test_ui_checks_logic(monkeypatch):
+    from cu_openalex.eval import ui_eval
+
+    pages = {
+        "/": "# Overview\nMedian FWCI 1.2 ... " + "x" * 300,
+        "/members": "# Members directory " + "x" * 300,
+        "/programs": "# Program Collaboration " + "x" * 300,
+        "/networks": "# Networks force graph " + "x" * 300,
+        "/funding": "# NIH Funding " + "x" * 300,
+    }
+    monkeypatch.setattr(
+        ui_eval, "render_markdown", lambda url, **k: pages.get(url.replace("http://x", ""))
+    )
+    checks = ui_eval.ui_checks("http://x", bin_path="dummy")
+    by = {c.name: c.status for c in checks}
+    assert by["renders /"] == "pass"
+    assert by["renders /members"] == "pass"
+    # the overview mentions "Median" -> responsible-metrics check passes
+    assert by["responsible metrics: median/distribution shown (overview)"] == "pass"
+
+
+def test_ui_checks_skipped_without_obscura(monkeypatch):
+    from cu_openalex.eval import ui_eval
+
+    monkeypatch.setattr(ui_eval, "obscura_bin", lambda: None)
+    monkeypatch.delenv("OBSCURA_BIN", raising=False)
+    checks = ui_eval.ui_checks("http://x")
+    assert len(checks) == 1 and checks[0].status == "skipped"
+
+
 def test_run_content_eval_with_injected_fetch():
     def fake(base, question, timeout):
         return {"queries": ["SELECT * FROM works"], "table": [{"n": 1}], "error": None}
