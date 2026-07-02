@@ -62,3 +62,64 @@ def test_collaboration_matrix_is_current_only(client: TestClient):
 
 def test_top_topics_validates_field_level(client: TestClient):
     assert client.get("/api/top-topics?field_level=bogus").status_code == 422
+
+
+# --- Membership spine (ADR-0025) --------------------------------------------
+
+requires_spine = pytest.mark.skipif(
+    not Path(cc_target("member_identifier")).exists(),
+    reason="membership spine not built",
+)
+
+
+@requires_spine
+def test_programs_dim(client: TestClient):
+    progs = client.get("/api/programs").json()
+    current = [p for p in progs if p["is_current"]]
+    assert len(current) == 4
+    assert {p["short_code"] for p in current} == {"CPC", "DT", "MCO", "THI"}
+    assert all(p["n_members"] > 0 for p in current)
+
+
+@requires_spine
+def test_org_units(client: TestClient):
+    units = client.get("/api/org-units").json()
+    assert {u["level"] for u in units} == {"institution", "school", "department", "division"}
+    # institution nodes are the roots (no parent)
+    assert all(u["parent_org_unit_id"] is None for u in units if u["level"] == "institution")
+
+
+@requires_spine
+def test_member_profile_carries_spine(client: TestClient):
+    from cu_openalex.cancer_center import queries as q
+
+    mid = int(
+        q.run_sql(
+            "SELECT member_a FROM member_link WHERE link_type = 'coauthorship' "
+            "ORDER BY weight DESC LIMIT 1"
+        )["member_a"][0]
+    )
+    spine = client.get(f"/api/member/{mid}").json()["spine"]
+    assert spine is not None
+    assert set(spine) >= {"identifiers", "membership", "appointment", "lifecycle", "link_counts"}
+    assert any(lc["link_type"] == "coauthorship" for lc in spine["link_counts"])
+
+
+@requires_spine
+def test_member_links_endpoint(client: TestClient):
+    from cu_openalex.cancer_center import queries as q
+
+    mid = int(
+        q.run_sql(
+            "SELECT member_a FROM member_link WHERE link_type = 'coauthorship' "
+            "ORDER BY weight DESC LIMIT 1"
+        )["member_a"][0]
+    )
+    links = client.get(f"/api/member/{mid}/links?link_type=coauthorship").json()
+    assert links and all(link["link_type"] == "coauthorship" for link in links)
+    assert all("other_name" in link and link["weight"] >= 1 for link in links)
+    # weights are sorted descending
+    weights = [link["weight"] for link in links]
+    assert weights == sorted(weights, reverse=True)
+    # allow-list rejects a bogus link_type
+    assert client.get(f"/api/member/{mid}/links?link_type=bogus").status_code == 422

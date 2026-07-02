@@ -232,6 +232,39 @@ def network(
     return networks.member_network_data(min_year, max_year, min_shared=min_shared, program=program)
 
 
+# --- Membership spine (ADR-0025) --------------------------------------------
+
+
+@app.get("/api/member/{member_id}/links")
+def member_links(
+    member_id: int,
+    link_type: str | None = Query(
+        None, pattern="^(coauthorship|cogrant|cocitation|biblio_coupling)$"
+    ),
+) -> list[dict]:
+    """A member's spine edges (co-authorship / co-grant), resolved to the other
+    member. Optionally filter to one ``link_type``."""
+    if not q.spine_available():
+        raise HTTPException(status_code=404, detail="membership spine not built")
+    return q.member_links(member_id, link_type)
+
+
+@app.get("/api/programs")
+def programs() -> list[dict]:
+    """The program dimension (canonical name, short code, current flag, size)."""
+    if not q.spine_available():
+        raise HTTPException(status_code=404, detail="membership spine not built")
+    return q.program_dim()
+
+
+@app.get("/api/org-units")
+def org_units() -> list[dict]:
+    """The institutional hierarchy (institution→school→dept→division) with counts."""
+    if not q.spine_available():
+        raise HTTPException(status_code=404, detail="membership spine not built")
+    return q.org_units()
+
+
 # --- Chat (NL → read-only SQL) ----------------------------------------------
 
 
