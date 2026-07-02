@@ -16,15 +16,18 @@ ENV UV_COMPILE_BYTECODE=1 \
 
 WORKDIR /app
 
-# Install deps first (cached) from the lockfile, with the `api` extra only.
+# Install deps first (cached) from the lockfile, with the serving `api` extra and
+# the `app` extra (ADR-0026: the writable overlay + Google OIDC auth tier). The
+# app tier stays dormant unless configured at runtime (UCCC_APP_* / GSM); with no
+# overlay DB password the container serves the read-only analytics API unchanged.
 COPY pyproject.toml uv.lock README.md ./
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --no-install-project --extra api
+    uv sync --frozen --no-install-project --extra api --extra app
 
 # Then the project source.
 COPY src ./src
 RUN --mount=type=cache,target=/root/.cache/uv \
-    uv sync --frozen --extra api
+    uv sync --frozen --extra api --extra app
 
 # Pre-install the DuckDB FTS extension so the baked BM25 index loads offline at
 # runtime (the container has no network to fetch extensions on demand). Use the

@@ -22,6 +22,28 @@ services:
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       # Optional: override the chat model (default gemini-2.5-flash).
       CU_OPENALEX_CHAT_MODEL: ${CU_OPENALEX_CHAT_MODEL:-}
+      # --- Application backend (ADR-0026): auth + editable profiles ------------
+      # The tier activates only when an overlay DB password is present. Secrets
+      # are injected as env (resolved from GSM at deploy time — see DEPLOYMENT.md)
+      # so the runtime container never contacts GSM. With these unset the API
+      # serves the read-only analytics only.
+      UCCC_APP_BASE_URL: ${UCCC_APP_BASE_URL:-https://insights.uccc.cancerdatasci.org}
+      UCCC_APP_HOSTED_DOMAIN: ${UCCC_APP_HOSTED_DOMAIN:-cuanschutz.edu}
+      UCCC_APP_ADMIN_EMAILS: ${UCCC_APP_ADMIN_EMAILS:-}
+      # Overlay Postgres. Default reaches the host-exposed :5432 from the
+      # container; set UCCC_APP_DB_HOST to the Postgres service name instead if
+      # you attach this service to the Postgres docker network.
+      UCCC_APP_DB_HOST: ${UCCC_APP_DB_HOST:-host.docker.internal}
+      UCCC_APP_DB_PORT: ${UCCC_APP_DB_PORT:-5432}
+      UCCC_APP_DB_NAME: ${UCCC_APP_DB_NAME:-uccc_app}
+      UCCC_APP_DB_USER: ${UCCC_APP_DB_USER:-uccc_app}
+      UCCC_APP_DB_PASSWORD: ${UCCC_APP_DB_PASSWORD:-}
+      UCCC_APP_OIDC_CLIENT_ID: ${UCCC_APP_OIDC_CLIENT_ID:-}
+      UCCC_APP_OIDC_CLIENT_SECRET: ${UCCC_APP_OIDC_CLIENT_SECRET:-}
+      UCCC_APP_SESSION_SECRET: ${UCCC_APP_SESSION_SECRET:-}
+    # Reach the host-exposed Postgres (:5432) from inside the container.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     # No volume mount: the serving DuckDB is baked into the image (ADR-0023).
     networks:
       - internal

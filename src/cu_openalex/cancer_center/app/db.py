@@ -7,6 +7,8 @@ at pool open, so a fresh deploy self-initializes.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 from pathlib import Path
 
 from psycopg_pool import AsyncConnectionPool
@@ -18,14 +20,24 @@ _pool: AsyncConnectionPool | None = None
 
 
 async def open_pool() -> AsyncConnectionPool:
-    """Open the overlay pool (idempotent) and apply the schema."""
+    """Open the overlay pool (idempotent) and apply the schema.
+
+    Never blocks API startup on the overlay: ``open(wait=False)`` returns
+    immediately (connections established in the background) and schema init is
+    bounded, so an unreachable/slow overlay leaves the read-only analytics API
+    fully responsive (the app routes degrade, not the whole service).
+    """
     global _pool
     if _pool is None:
         cfg = get_app_config()
-        pool = AsyncConnectionPool(cfg.dsn, min_size=1, max_size=8, open=False)
-        await pool.open()
-        await _init_schema(pool)
+        pool = AsyncConnectionPool(
+            cfg.dsn + " connect_timeout=5", min_size=1, max_size=8, open=False
+        )
+        await pool.open(wait=False)
         _pool = pool
+        # Schema re-applies when the overlay recovers; never block startup on it.
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(_init_schema(pool), timeout=6)
     return _pool
 
 
