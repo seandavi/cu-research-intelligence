@@ -140,24 +140,14 @@ dormant until an overlay DB password is present. Turn it on in four steps:
    echo 'UCCC_APP_ADMIN_EMAILS=sean.2.davis@cuanschutz.edu' >> .env  # seed the first admin
    ```
 
-3. **Give the `api` container a route to the overlay Postgres.** The shared
-   Postgres binds `localhost` on the host, so the compose default
-   (`host.docker.internal` via `extra_hosts: host-gateway`) reaches it **only** if
-   you also make Postgres listen on the docker bridge. The robust path is to attach
-   `api` to the Postgres container's docker network and point at its **service
-   name**:
-
-   ```yaml
-   # docker-compose.yml — api service
-   networks: [internal, pg]
-   environment:
-     UCCC_APP_DB_HOST: <postgres-service-name>
-   # ...and add `pg: { external: true, name: <postgres-network> }` under networks:
-   ```
-
-   The overlay is the dedicated `uccc_app` database + role (provisioned separately;
-   **not** the shared `lake` catalog). If the overlay is unreachable the app tier
-   degrades to disabled and the read-only analytics API keeps serving.
+3. **Overlay Postgres reachability — already wired.** `docker-compose.yml`
+   attaches `api` to the shared Postgres network (`pg` → external
+   `pg_main_stack_default`) and points `UCCC_APP_DB_HOST` at the `pg_main`
+   service, so the container reaches the dedicated `uccc_app` database directly
+   (**not** the shared `lake` catalog). On a host where the Postgres lives
+   elsewhere, override `UCCC_APP_DB_HOST` and the `pg` network name. If the
+   overlay is ever unreachable the app tier degrades to disabled and the read-only
+   analytics API keeps serving.
 
 4. **Deploy:** `docker compose up -d --build`. Verify:
 

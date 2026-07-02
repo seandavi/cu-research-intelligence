@@ -30,10 +30,10 @@ services:
       UCCC_APP_BASE_URL: ${UCCC_APP_BASE_URL:-https://insights.uccc.cancerdatasci.org}
       UCCC_APP_HOSTED_DOMAIN: ${UCCC_APP_HOSTED_DOMAIN:-cuanschutz.edu}
       UCCC_APP_ADMIN_EMAILS: ${UCCC_APP_ADMIN_EMAILS:-}
-      # Overlay Postgres. Default reaches the host-exposed :5432 from the
-      # container; set UCCC_APP_DB_HOST to the Postgres service name instead if
-      # you attach this service to the Postgres docker network.
-      UCCC_APP_DB_HOST: ${UCCC_APP_DB_HOST:-host.docker.internal}
+      # Overlay Postgres — the dedicated `uccc_app` database on the shared
+      # `pg_main` server (reached over its docker network `pg`, below). Not the
+      # shared `lake` catalog.
+      UCCC_APP_DB_HOST: ${UCCC_APP_DB_HOST:-pg_main}
       UCCC_APP_DB_PORT: ${UCCC_APP_DB_PORT:-5432}
       UCCC_APP_DB_NAME: ${UCCC_APP_DB_NAME:-uccc_app}
       UCCC_APP_DB_USER: ${UCCC_APP_DB_USER:-uccc_app}
@@ -41,12 +41,10 @@ services:
       UCCC_APP_OIDC_CLIENT_ID: ${UCCC_APP_OIDC_CLIENT_ID:-}
       UCCC_APP_OIDC_CLIENT_SECRET: ${UCCC_APP_OIDC_CLIENT_SECRET:-}
       UCCC_APP_SESSION_SECRET: ${UCCC_APP_SESSION_SECRET:-}
-    # Reach the host-exposed Postgres (:5432) from inside the container.
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
     # No volume mount: the serving DuckDB is baked into the image (ADR-0023).
     networks:
       - internal
+      - pg
 
   # React SPA on nginx; serves the app and reverse-proxies /api → api:8000.
   # This is the only public-facing service.
@@ -78,6 +76,11 @@ networks:
   # Externally-managed network that the Traefik instance is attached to.
   proxy:
     external: true
+  # The shared Postgres server's network — the api service joins it to reach the
+  # `uccc_app` overlay (ADR-0026). Externally managed by the pg_main stack.
+  pg:
+    external: true
+    name: pg_main_stack_default
   # Private network between web (nginx) and api.
   internal:
     driver: bridge
