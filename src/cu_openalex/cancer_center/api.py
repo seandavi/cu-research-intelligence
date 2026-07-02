@@ -18,6 +18,7 @@ restrict browser origins with ``CU_OPENALEX_CORS_ORIGINS`` (comma-separated).
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 
 import polars as pl
 from fastapi import FastAPI, HTTPException, Query
@@ -28,11 +29,59 @@ from . import chat, networks
 from . import queries as q
 from .programs import CURRENT_PROGRAMS
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Open the writable overlay pool if the app tier (ADR-0026) is configured.
+
+    Fully guarded: the analytics API runs unchanged when the ``app`` extra isn't
+    installed or the overlay isn't configured (CI, analytics-only deploys)."""
+    opened = False
+    try:
+        from .app.config import app_enabled
+
+        if app_enabled():
+            from .app.db import open_pool
+
+            await open_pool()
+            opened = True
+    except Exception:  # noqa: BLE001 — app tier is optional; never block serving
+        opened = False
+    yield
+    if opened:
+        from .app.db import close_pool
+
+        await close_pool()
+
+
 app = FastAPI(
     title="UCCC Research Intelligence API",
     version="0.1.0",
     summary="Cancer-center publications, program collaboration, and impact.",
+    lifespan=lifespan,
 )
+
+# App tier (ADR-0026): mount auth/session routes + the signed session cookie only
+# when configured. Guarded so a missing `app` extra or unreachable overlay leaves
+# the read-only analytics API fully functional.
+try:
+    from .app.config import app_enabled, get_app_config
+
+    if app_enabled():
+        from starlette.middleware.sessions import SessionMiddleware
+
+        from .app.routes import router as app_router
+
+        _cfg = get_app_config()
+        app.add_middleware(
+            SessionMiddleware,
+            secret_key=_cfg.session_secret,
+            same_site="lax",
+            https_only=_cfg.base_url.startswith("https"),
+        )
+        app.include_router(app_router)
+except Exception:  # noqa: BLE001 — never let optional app wiring break the API
+    pass
 
 _origins = os.environ.get("CU_OPENALEX_CORS_ORIGINS", "*").split(",")
 app.add_middleware(
