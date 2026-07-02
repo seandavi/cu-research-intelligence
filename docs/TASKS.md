@@ -36,21 +36,24 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 - [ ] Concurrency: parallelize the works date-group scans within the daily/total
       OpenAlex etiquette limits if backfill is too slow serially
 
-## Milestone 3 — Membership spine (ADR-0025, todo)
+## Milestone 3 — Membership spine (ADR-0025, in progress)
 
-- [ ] Build the normalized membership marts in `docs/membership_data_model.md`
+- [x] Build the normalized membership marts (`cancer_center/membership.py`)
       from the roster (`member`, `member_identifier`, `program` +
       `program_code_alias`, `membership` (snapshot-grained), `member_lifecycle_event`,
-      `org_unit`, `member_appointment`, `faculty_rank`) — additive to the existing
-      flat `members.py` load / `members.parquet` crosswalk, not a replacement
-- [ ] `research_interest_group` + `rig_signup`: load the 65-row RIG form, match
-      to `member` by name/email, record `match_method` (only ~23/65 exact-match)
-- [ ] `roster_snapshot` + `roster_snapshot_member`: load the 284-row "Active
-      Cancer Center Membership" + CPC "Publishing Members" cuts as validation
-      evidence; report status/program drift vs the authoritative roster
-- [ ] `member_link` spine table: reshape `networks.member_coauthorship_edges`
-      (coauthorship, built) + derive `cogrant` from `member_grants` shared
-      `core_project_num`; leave `cocitation`/`biblio_coupling` blocked on the item below
+      `org_unit`, `member_appointment`, `faculty_rank`, `member_openalex_resolution`)
+      — additive to the flat `members.py` load / `members.parquet` crosswalk; baked
+      into `serving.duckdb`; offline tests in `tests/test_membership.py`
+- [x] `member_link` spine table: `coauthorship` (reshaped from `works.cc_member_ids`)
+      + `cogrant` (derived from `member_grants` shared `core_project_num`);
+      `cocitation`/`biblio_coupling` left blocked on `referenced_works` (below)
+- [x] `roster_snapshot` + `roster_snapshot_member`: authoritative all-ever
+      snapshot loaded as provenance
+- [ ] Load the secondary validation cuts (284-row "Active Cancer Center
+      Membership" + CPC "Publishing Members") from `cc-data/`; report status/program
+      drift vs the authoritative roster
+- [ ] `research_interest_group` + `rig_signup`: load the 65-row RIG form from
+      `cc-data/`, match to `member` by name/email, record `match_method` (~23/65)
 
 ## Milestone 4 — Catchment relevance (ADR-0024, todo)
 

@@ -20,8 +20,26 @@ from .paths import cc_target, serving_db_path
 
 # Marts the serving layer requires; the build always produces these.
 _REQUIRED = ("members", "works", "member_works")
-# Marts added by later flows (institutions, NIH grants); baked in when present.
-_OPTIONAL = ("institutions", "member_grants")
+# Marts added by later flows (institutions, NIH grants, membership spine);
+# baked in when present.
+_OPTIONAL = (
+    "institutions",
+    "member_grants",
+    # Membership spine (ADR-0025), built by cancer_center.membership.
+    "member",
+    "member_identifier",
+    "program",
+    "program_code_alias",
+    "membership",
+    "member_lifecycle_event",
+    "org_unit",
+    "member_appointment",
+    "faculty_rank",
+    "member_openalex_resolution",
+    "roster_snapshot",
+    "roster_snapshot_member",
+    "member_link",
+)
 
 
 def bake_serving_db() -> str:
