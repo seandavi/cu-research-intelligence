@@ -6,6 +6,9 @@
 *.duckdb
 *.duckdb.wal
 
+# UCCC source drop — contains member PII, never commit (see docs/adr/0024,0025)
+/cc-data/
+
 # Python
 __pycache__/
 *.py[cod]
