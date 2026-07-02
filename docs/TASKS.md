@@ -150,8 +150,12 @@ Live at https://insights.uccc.cancerdatasci.org (app tier + Google OIDC deployed
       ADR-0016 FTS); topic/concept matching; cancer-relevance filter on counts.
 - [ ] **Harness iteration 3:** Obscura CDP task-walkthroughs (persona scenarios) +
       LLM-judge heuristics with a human calibration set (`docs/eval/05`).
-- [ ] **UI finding:** `/networks` renders text-sparse (force-graph canvas) — add a
-      text/accessible view.
+- [x] **UI finding:** `/networks` rendered text-sparse — the force-graph canvas
+      threw under the headless renderer and, with no error boundary, blanked the
+      whole page. Fixed: `ErrorBoundary` isolates the canvas, a prose network
+      summary + named bridges render at page level (independent of the canvas),
+      the graph is labeled `role="img"`, and an `.sr-only` utility was added. Eval
+      `ui_checks` `renders /networks` now passes (2.8k chars vs 1).
 - [ ] **Reportable/trust foundation (admin round, later):** `is_reportable`
       (research articles only, exclude reviews — our `is_publication` includes
       reviews), fiscal-year windows, curated-vs-OpenAlex provenance/mode switch,
