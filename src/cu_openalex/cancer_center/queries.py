@@ -62,8 +62,26 @@ def connect() -> duckdb.DuckDBPyConnection:
                 "Run `python -m cu_openalex.cancer_center.build`."
             )
         con.execute(f"CREATE VIEW {name} AS SELECT * FROM '{path}'")
-    # institutions and member_grants are optional (added later); register if present.
-    for opt in ("institutions", "member_grants"):
+    # institutions, grants, and the membership-spine marts are optional (added by
+    # later flows); register whichever are present so dev/test runs off `build`.
+    for opt in (
+        "institutions",
+        "member_grants",
+        # Membership spine (ADR-0025), built by cancer_center.membership.
+        "member",
+        "member_identifier",
+        "program",
+        "program_code_alias",
+        "membership",
+        "member_lifecycle_event",
+        "org_unit",
+        "member_appointment",
+        "faculty_rank",
+        "member_openalex_resolution",
+        "roster_snapshot",
+        "roster_snapshot_member",
+        "member_link",
+    ):
         path = cc_target(opt)
         if Path(path).exists():
             con.execute(f"CREATE VIEW {opt} AS SELECT * FROM '{path}'")
@@ -741,4 +759,149 @@ def member_profile(
         "top_journals": top_journals.to_dicts(),
         "top_coauthors": top_coauthors.to_dicts(),
         "grants": grants,
+        # Membership-spine detail (ADR-0025); None when the marts aren't built.
+        "spine": member_spine(member_id) if spine_available() else None,
     }
+
+
+# --------------------------------------------------------------------------- #
+# Membership spine (ADR-0025) read surface
+# --------------------------------------------------------------------------- #
+# member_link edge types that may be requested/filtered; allow-listed because the
+# value is interpolated into SQL (defense-in-depth alongside the API `pattern=`).
+_LINK_TYPES: frozenset[str] = frozenset(
+    {"coauthorship", "cogrant", "cocitation", "biblio_coupling"}
+)
+
+
+def spine_available() -> bool:
+    """True if the membership-spine marts have been built (ADR-0025)."""
+    return table_exists("member_identifier")
+
+
+def member_spine(member_id: int) -> dict:
+    """Normalized spine detail for one member: identifiers, appointment, status
+    history, and link counts. Assumes the spine marts exist (see
+    :func:`spine_available`)."""
+    member_id = int(member_id)
+    identifiers = run_sql(
+        f"""
+        SELECT id_type, id_value, source, is_primary
+        FROM member_identifier WHERE member_id = {member_id}
+        ORDER BY id_type, is_primary DESC, id_value
+        """
+    ).to_dicts()
+    membership = run_sql(
+        f"""
+        SELECT ms.snapshot_date, p.canonical_name AS program, p.short_code,
+               ms.member_type, ms.member_status, ms.status_date,
+               ms.member_type_start_date, ms.applied_date, ms.is_active
+        FROM membership ms LEFT JOIN program p USING (program_id)
+        WHERE ms.member_id = {member_id}
+        ORDER BY ms.snapshot_date DESC
+        """
+    ).to_dicts()
+    appointment = run_sql(
+        f"""
+        SELECT faculty_rank, org_unit_id
+        FROM member_appointment WHERE member_id = {member_id}
+        """
+    ).to_dicts()
+    # Resolve the appointment's org unit up to the institution root as a path.
+    org_path = run_sql(
+        f"""
+        WITH RECURSIVE chain AS (
+            SELECT org_unit_id, name, parent_org_unit_id, 0 AS depth
+            FROM org_unit
+            WHERE org_unit_id = (
+                SELECT org_unit_id FROM member_appointment
+                WHERE member_id = {member_id} AND org_unit_id IS NOT NULL LIMIT 1
+            )
+            UNION ALL
+            SELECT o.org_unit_id, o.name, o.parent_org_unit_id, c.depth + 1
+            FROM org_unit o JOIN chain c ON o.org_unit_id = c.parent_org_unit_id
+        )
+        SELECT string_agg(name, ' / ' ORDER BY depth DESC) AS org_path FROM chain
+        """
+    ).to_dicts()
+    lifecycle = run_sql(
+        f"""
+        SELECT event_type, event_date, detail
+        FROM member_lifecycle_event WHERE member_id = {member_id}
+        ORDER BY event_date, event_type
+        """
+    ).to_dicts()
+    link_counts = run_sql(
+        f"""
+        SELECT link_type, count(*) AS n, sum(weight)::BIGINT AS total_weight
+        FROM member_link WHERE member_a = {member_id} OR member_b = {member_id}
+        GROUP BY 1 ORDER BY 1
+        """
+    ).to_dicts()
+    appt = appointment[0] if appointment else {}
+    return {
+        "identifiers": identifiers,
+        "membership": membership,
+        "appointment": {
+            "faculty_rank": appt.get("faculty_rank"),
+            "org_path": org_path[0]["org_path"] if org_path else None,
+        },
+        "lifecycle": lifecycle,
+        "link_counts": link_counts,
+    }
+
+
+def member_links(member_id: int, link_type: str | None = None) -> list[dict]:
+    """A member's spine edges, resolved to the other member's name/program.
+
+    ``link_type`` optionally filters to one edge type (allow-listed)."""
+    member_id = int(member_id)
+    type_clause = ""
+    if link_type is not None:
+        if link_type not in _LINK_TYPES:
+            raise ValueError(f"unknown link_type {link_type!r}")
+        type_clause = f"AND l.link_type = '{link_type}'"
+    return run_sql(
+        f"""
+        WITH e AS (
+            SELECT CASE WHEN l.member_a = {member_id} THEN l.member_b ELSE l.member_a END
+                       AS other_member_id,
+                   l.link_type, l.weight, l.min_year, l.max_year
+            FROM member_link l
+            WHERE (l.member_a = {member_id} OR l.member_b = {member_id}) {type_clause}
+        )
+        SELECT e.other_member_id,
+               m.First_Name || ' ' || m.Last_Name AS other_name,
+               m.PrimaryProgram AS other_program,
+               e.link_type, e.weight, e.min_year, e.max_year
+        FROM e LEFT JOIN members m ON m.Member_ID = e.other_member_id
+        ORDER BY e.weight DESC, e.link_type
+        """
+    ).to_dicts()
+
+
+def program_dim() -> list[dict]:
+    """The program dimension with member counts (ADR-0025)."""
+    return run_sql(
+        """
+        SELECT p.program_id, p.canonical_name, p.short_code,
+               p.is_current, p.is_real_program,
+               count(DISTINCT ms.member_id) AS n_members
+        FROM program p LEFT JOIN membership ms USING (program_id)
+        GROUP BY ALL
+        ORDER BY p.is_current DESC, n_members DESC, p.canonical_name
+        """
+    ).to_dicts()
+
+
+def org_units() -> list[dict]:
+    """The institutional hierarchy (org_unit tree) with member counts."""
+    return run_sql(
+        """
+        SELECT o.org_unit_id, o.level, o.name, o.parent_org_unit_id,
+               count(DISTINCT a.member_id) AS n_members
+        FROM org_unit o LEFT JOIN member_appointment a USING (org_unit_id)
+        GROUP BY ALL
+        ORDER BY o.level, o.name
+        """
+    ).to_dicts()
