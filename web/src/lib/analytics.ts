@@ -7,7 +7,7 @@
 // with VITE_GA_MEASUREMENT_ID (set it to "off" to disable). Not a secret — the
 // ID is visible in the client bundle by design.
 const ENV_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
-const GA_ID = ENV_ID === "off" ? undefined : (ENV_ID || "G-G7K5N1LWV9");
+const GA_ID = ENV_ID === "off" ? undefined : (ENV_ID || "G-YTL0Z01D6X");
 let started = false;
 
 export function initAnalytics(): void {
