@@ -44,3 +44,26 @@ CREATE TABLE IF NOT EXISTS pub_correction (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (member_id, work_id)
 );
+
+-- Scientific-retreat submissions: abstracts, panel questions, registrations.
+-- The landing table for the external form exports (CSV import in app/retreat.py)
+-- plus in-app panel questions. Resolved to a member by email through the spine
+-- at insert time; ``extra`` keeps any other form columns verbatim.
+CREATE TABLE IF NOT EXISTS retreat_entry (
+    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    kind       TEXT NOT NULL CHECK (kind IN ('abstract', 'question', 'registration')),
+    name       TEXT NOT NULL,
+    email      TEXT,
+    member_id  BIGINT,                      -- nullable: lab members, guests, unmatched emails
+    program    TEXT,
+    title      TEXT,
+    body       TEXT,                        -- abstract text / question text
+    category   TEXT,                        -- abstract: preferred format; question: topic area
+    decision   TEXT,                        -- abstract triage: oral / discussion / poster / declined
+    extra      JSONB NOT NULL DEFAULT '{}',
+    created_by BIGINT REFERENCES app_user (id),
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Re-importing the same form export must not duplicate rows.
+CREATE UNIQUE INDEX IF NOT EXISTS retreat_entry_dedup
+    ON retreat_entry (kind, lower(coalesce(email, '')), md5(coalesce(title, '') || coalesce(body, '')));

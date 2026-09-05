@@ -85,3 +85,12 @@ export const useNetwork = (r?: YearRange, minShared = 2, program?: string) =>
     queryFn: () => api.network(r, minShared, program),
     enabled: !!r,
   });
+
+export const useMe = () =>
+  useQuery({ queryKey: ["me"], queryFn: api.me, retry: false, staleTime: Infinity });
+
+export const useRetreatThemes = (r?: YearRange) =>
+  useQuery({ queryKey: key("retreat_themes", r), queryFn: () => api.retreatThemes(r), enabled: !!r });
+
+export const useRetreatEntries = (enabled: boolean) =>
+  useQuery({ queryKey: ["retreat_entries"], queryFn: api.retreatEntries, retry: false, enabled });

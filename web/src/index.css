@@ -136,3 +136,12 @@ table.data a:hover { text-decoration: underline; }
 
 .loading { color: var(--muted); padding: 2rem 0; }
 .error { color: #c53030; background: #fdeaea; padding: 0.6rem 0.8rem; border-radius: 8px; }
+
+/* Retreat */
+.clickable { cursor: pointer; }
+tr.sel td { background: #eef2f7; }
+.qform { display: grid; gap: 0.5rem; margin-bottom: 0.9rem; max-width: 720px; }
+.qform textarea, .qform select { padding: 0.45rem 0.55rem; border: 1px solid var(--line); border-radius: 7px; font: inherit; }
+.qform textarea { min-height: 72px; }
+.termlist { color: var(--muted); font-size: 0.78rem; }
+.cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }

@@ -285,3 +285,42 @@ export interface YearRange {
   minYear: number;
   maxYear: number;
 }
+
+// --- Scientific retreat -----------------------------------------------------
+
+export interface RetreatTheme {
+  name: string;
+  terms: string[];
+  publications: number;
+  members: number;
+  by_program: { program: string; publications: number; members: number }[];
+  top_members: { member_id: number; name: string; program: string | null; publications: number }[];
+  top_topics: { topic: string; publications: number }[];
+}
+
+export type RetreatKind = "abstract" | "question" | "registration";
+
+export interface RetreatEntry {
+  id: number;
+  kind: RetreatKind;
+  name: string;
+  email: string | null;
+  member_id: number | null;
+  program: string | null;
+  title: string | null;
+  body: string | null;
+  category: string | null;
+  decision: string | null;
+  extra: Record<string, string>;
+  created_at: string;
+  themes: string[];
+}
+
+export interface Me {
+  authenticated: boolean;
+  user_id?: number;
+  email?: string;
+  name?: string | null;
+  member_id?: number | null;
+  roles?: string[];
+}

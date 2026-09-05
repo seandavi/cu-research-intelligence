@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import chat, networks
+from . import chat, networks, retreat
 from . import queries as q
 from .programs import CURRENT_PROGRAMS
 
@@ -327,6 +327,16 @@ def experts(
     to that member (shared papers/grants, existing_collaborator) rather than
     excluding — the base tool for the collaborator agent."""
     return q.find_experts(q_, program=program, relative_to=relative_to, limit=limit)
+
+
+# --- Scientific retreat: themes over member output --------------------------
+
+
+@app.get("/api/retreat/themes")
+def retreat_themes(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
+    """Each retreat theme mapped onto member publications: total, per program,
+    top members, top OpenAlex topics (session planning / panelist discovery)."""
+    return retreat.themes_report(min_year, max_year)
 
 
 # --- Chat (NL → read-only SQL) ----------------------------------------------

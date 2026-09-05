@@ -11,6 +11,7 @@ import type {
   InterInstTrendRow,
   Kpi,
   MatrixCell,
+  Me,
   MemberLink,
   MemberProfile,
   MemberRow,
@@ -21,6 +22,9 @@ import type {
   ProgramCombination,
   ProgramSummaryRow,
   PublicationYearRow,
+  RetreatEntry,
+  RetreatKind,
+  RetreatTheme,
   YearRange,
 } from "./types";
 
@@ -34,6 +38,16 @@ async function get<T>(path: string, params: Record<string, unknown> = {}): Promi
   const url = `${BASE}${path}${qs.toString() ? `?${qs}` : ""}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${path}`);
   return res.json() as Promise<T>;
 }
 
@@ -90,6 +104,14 @@ export const api = {
   grantsByAgency: (r?: YearRange) => get<GrantAgencyRow[]>("/grants-by-agency", yr(r)),
   network: (r?: YearRange, minShared = 2, program?: string) =>
     get<NetworkData>("/network", { ...yr(r), min_shared: minShared, program }),
+  // App tier (ADR-0026) + retreat submissions. `/me` 404s when the tier is off.
+  me: () => get<Me>("/me"),
+  retreatThemes: (r?: YearRange) => get<RetreatTheme[]>("/retreat/themes", yr(r)),
+  retreatEntries: () => get<RetreatEntry[]>("/retreat/entries"),
+  retreatSubmit: (body: { kind: RetreatKind; title?: string; body?: string; category?: string }) =>
+    post<{ id: number | null; duplicate: boolean }>("/retreat/entries", body),
+  retreatDecide: (id: number, body: { decision: string | null; category?: string }) =>
+    post<{ ok: boolean }>(`/retreat/entries/${id}/decision`, body),
   chat: async (question: string, history?: unknown[]): Promise<ChatResponse> => {
     const res = await fetch(`${BASE}/chat`, {
       method: "POST",
