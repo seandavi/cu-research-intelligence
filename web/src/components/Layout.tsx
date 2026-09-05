@@ -6,6 +6,7 @@ const NAV = [
   { to: "/", label: "Overview", end: true },
   { to: "/publications", label: "Publications" },
   { to: "/programs", label: "Program Collaboration" },
+  { to: "/foci", label: "Strategic Foci" },
   { to: "/institutions", label: "Inter-institutional" },
   { to: "/funding", label: "NIH Funding", needsGrants: true },
   { to: "/networks", label: "Networks" },

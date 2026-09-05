@@ -140,3 +140,44 @@ def test_member_links_endpoint(client: TestClient):
     assert weights == sorted(weights, reverse=True)
     # allow-list rejects a bogus link_type
     assert client.get(f"/api/member/{mid}/links?link_type=bogus").status_code == 422
+
+
+# --- Strategic foci (issue #38) ---------------------------------------------
+
+requires_foci = pytest.mark.skipif(
+    not Path(cc_target("work_focus")).exists(), reason="work_focus mart not built"
+)
+
+
+@requires_foci
+def test_foci_lists_strategic_plan_foci(client: TestClient):
+    from cu_openalex.cancer_center.retreat import FOCUS, THEMES
+
+    rows = client.get("/api/foci").json()
+    plan = {r["name"]: r for r in rows if r["group"] == FOCUS}
+    assert set(plan) == {t["name"] for t in THEMES if t["group"] == FOCUS}
+    assert len(plan) == 5
+    assert all(r["publications"] > 0 for r in plan.values())
+    assert all({"inter_program_pct", "median_rcr", "pct_top_10"} <= set(r) for r in rows)
+
+
+@requires_foci
+def test_publications_focus_filter_narrows(client: TestClient):
+    total = client.get("/api/publications?page_size=1").json()["total"]
+    focused = client.get("/api/publications?focus=Immunotherapy&page_size=1").json()["total"]
+    assert 0 < focused < total
+
+
+@requires_foci
+def test_foci_combinations(client: TestClient):
+    combos = client.get("/api/foci-combinations").json()
+    assert combos and all(c["count"] > 0 and c["programs"] for c in combos)
+    assert any(len(c["programs"]) >= 2 for c in combos)  # papers in more than one focus
+
+
+@requires_foci
+def test_members_min_foci(client: TestClient):
+    rows = client.get("/api/members?min_foci=2").json()
+    assert rows and all(len(r["foci"]) >= 2 for r in rows)
+    focused = client.get("/api/members?focus=Immunotherapy").json()
+    assert focused and all("Immunotherapy" in r["foci"] for r in focused)

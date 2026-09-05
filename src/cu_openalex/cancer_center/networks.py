@@ -48,42 +48,50 @@ def member_coauthorship_edges(
     min_year: int | None = None,
     max_year: int | None = None,
     min_shared: int = 2,
+    focus: str | None = None,
 ) -> pl.DataFrame:
     """Member-pair co-authorship edges (weight = shared publications).
 
-    ``min_shared`` filters weak ties to keep the graph readable.
+    ``min_shared`` filters weak ties to keep the graph readable; ``focus``
+    restricts to works tagged with one strategic focus.
     """
     yc = q._year_clause(min_year, max_year)
-    return q.run_sql(
+    fc, params = q._focus_clause(focus)
+    return q.run_params(
         f"""
         WITH pairs AS (
             SELECT m1 AS member_a, m2 AS member_b
             FROM works w,
                  UNNEST(w.cc_member_ids) AS a(m1),
                  UNNEST(w.cc_member_ids) AS b(m2)
-            WHERE {yc} AND m1 < m2
+            WHERE {yc} AND m1 < m2 AND {fc}
         )
         SELECT member_a, member_b, count(*) AS weight
         FROM pairs GROUP BY 1, 2
         HAVING count(*) >= {min_shared}
         ORDER BY weight DESC
-        """
+        """,
+        params,
     )
 
 
-def _member_attrs(min_year: int | None, max_year: int | None) -> pl.DataFrame:
+def _member_attrs(
+    min_year: int | None, max_year: int | None, focus: str | None = None
+) -> pl.DataFrame:
     yc = q._year_clause(min_year, max_year, col="mw.publication_year")
-    return q.run_sql(
+    fc, params = q._focus_clause(focus, alias="mw")
+    return q.run_params(
         f"""
         SELECT m.Member_ID AS member_id,
                m.First_Name || ' ' || m.Last_Name AS name,
                m.PrimaryProgram AS program,
                count(DISTINCT mw.work_id) AS publications
         FROM members m
-        LEFT JOIN member_works mw ON mw.member_id = m.Member_ID AND {yc}
+        LEFT JOIN member_works mw ON mw.member_id = m.Member_ID AND {yc} AND {fc}
         WHERE m.author_id IS NOT NULL
         GROUP BY ALL
-        """
+        """,
+        params,
     )
 
 
@@ -92,14 +100,16 @@ def build_member_graph(
     max_year: int | None = None,
     min_shared: int = 2,
     program: str | None = None,
+    focus: str | None = None,
 ) -> nx.Graph:
     """Build the member co-authorship graph with node attributes + centrality.
 
     Node attrs: ``name``, ``program``, ``publications``, ``degree``,
-    ``betweenness``. If ``program`` is given, restrict to members of that program.
+    ``betweenness``. If ``program`` is given, restrict to members of that program;
+    ``focus`` restricts edges and publication counts to one strategic focus.
     """
-    edges = member_coauthorship_edges(min_year, max_year, min_shared)
-    attrs = _member_attrs(min_year, max_year)
+    edges = member_coauthorship_edges(min_year, max_year, min_shared, focus=focus)
+    attrs = _member_attrs(min_year, max_year, focus=focus)
     if program:
         keep = set(attrs.filter(pl.col("program") == program)["member_id"].to_list())
         edges = edges.filter(pl.col("member_a").is_in(keep) & pl.col("member_b").is_in(keep))
@@ -133,6 +143,7 @@ def member_network_data(
     max_year: int | None = None,
     min_shared: int = 2,
     program: str | None = None,
+    focus: str | None = None,
 ) -> dict:
     """Serializable co-authorship graph for the API / a JS graph renderer.
 
@@ -140,7 +151,7 @@ def member_network_data(
     ``id, name, program, publications, degree, betweenness`` and each edge
     ``source, target, weight``.
     """
-    g = build_member_graph(min_year, max_year, min_shared=min_shared, program=program)
+    g = build_member_graph(min_year, max_year, min_shared=min_shared, program=program, focus=focus)
     nodes = [
         {
             "id": n,

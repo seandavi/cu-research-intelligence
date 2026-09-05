@@ -16,8 +16,9 @@ from __future__ import annotations
 import polars as pl
 
 from ..storage import duckdb_connect
+from . import queries as q
 from .paths import cc_target
-from .retreat import THEMES, _cases
+from .retreat import FOCUS, THEMES, _cases
 
 _WORKS_GLOB = "data/cancer_center/works.parquet"
 
@@ -49,6 +50,47 @@ def build_work_focus(source: str | None = None) -> str:
         names, on="theme_idx"
     ).write_parquet(out)
     return out
+
+
+# --- Read surface (foci page, issue #38) -------------------------------------
+# Counts use the works' own flags (is_inter_program, rcr, is_top_10_pct) under the
+# retreat cohort rule (cancer-relevant, no meeting abstracts) — the same filter
+# ``focus=`` applies on the publication/program/network endpoints, so numbers agree.
+
+
+def foci(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
+    """Per focus/theme: publications, inter-programmatic %, median RCR, % top-10%."""
+    yc = q._year_clause(min_year, max_year, col="w.publication_year")
+    return q.run_sql(
+        f"""
+        SELECT f.focus AS name, f."group" AS "group",
+               count(*) AS publications,
+               round(100.0 * avg(w.is_inter_program::int), 1) AS inter_program_pct,
+               round(median(w.rcr), 2) AS median_rcr,
+               round(100.0 * avg(w.is_top_10_pct::int), 1) AS pct_top_10
+        FROM works w JOIN work_focus f USING (work_id)
+        WHERE {yc} AND {q.cohort_clause()}
+        GROUP BY f.theme_idx, 1, 2 ORDER BY f.theme_idx
+        """
+    ).to_dicts()
+
+
+def foci_combinations(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
+    """Publications per exact *set* of Strategic Plan foci (UpSet input; same
+    ``{programs, count}`` shape as :func:`queries.program_combinations`)."""
+    yc = q._year_clause(min_year, max_year, col="w.publication_year")
+    return q.run_params(
+        f"""
+        WITH combos AS (
+            SELECT w.work_id, list_sort(list(DISTINCT f.focus)) AS programs
+            FROM works w JOIN work_focus f USING (work_id)
+            WHERE {yc} AND {q.cohort_clause()} AND f."group" = ?
+            GROUP BY 1
+        )
+        SELECT programs, count(*) AS count FROM combos GROUP BY 1 ORDER BY count DESC
+        """,
+        [FOCUS],
+    ).to_dicts()
 
 
 def main() -> None:

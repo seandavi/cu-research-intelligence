@@ -5,6 +5,7 @@ import type {
   ChatResponse,
   CollaborationTrendRow,
   CollaboratorRow,
+  FocusRow,
   GrantAgencyRow,
   GrantProgramRow,
   GrantSummary,
@@ -63,13 +64,16 @@ export const api = {
     get<PublicationYearRow[]>("/publications-by-year", { ...yr(r), by }),
   collaborationTrend: (r?: YearRange) =>
     get<CollaborationTrendRow[]>("/collaboration-trend", yr(r)),
-  programSummary: (r?: YearRange, currentOnly = true) =>
-    get<ProgramSummaryRow[]>("/program-summary", { ...yr(r), current_only: currentOnly }),
-  collaborationMatrix: (r?: YearRange, currentOnly = true) =>
-    get<MatrixCell[]>("/program-collaboration-matrix", { ...yr(r), current_only: currentOnly }),
+  programSummary: (r?: YearRange, currentOnly = true, focus?: string) =>
+    get<ProgramSummaryRow[]>("/program-summary", { ...yr(r), current_only: currentOnly, focus }),
+  collaborationMatrix: (r?: YearRange, currentOnly = true, focus?: string) =>
+    get<MatrixCell[]>("/program-collaboration-matrix", { ...yr(r), current_only: currentOnly, focus }),
   programCombinations: (r?: YearRange, currentOnly = true) =>
     get<ProgramCombination[]>("/program-combinations", { ...yr(r), current_only: currentOnly }),
-  members: (r?: YearRange) => get<MemberRow[]>("/members", yr(r)),
+  foci: (r?: YearRange) => get<FocusRow[]>("/foci", yr(r)),
+  fociCombinations: (r?: YearRange) => get<ProgramCombination[]>("/foci-combinations", yr(r)),
+  members: (r?: YearRange, focus?: string, minFoci?: number) =>
+    get<MemberRow[]>("/members", { ...yr(r), focus, min_foci: minFoci }),
   member: (id: number, r?: YearRange) => get<MemberProfile>(`/member/${id}`, yr(r)),
   memberLinks: (id: number, linkType?: string) =>
     get<MemberLink[]>(`/member/${id}/links`, { link_type: linkType }),
@@ -88,6 +92,7 @@ export const api = {
     set("author", f.author);
     set("min_citations", f.min_citations);
     set("min_rcr", f.min_rcr);
+    set("focus", f.focus);
     set("sort", f.sort);
     set("descending", f.descending);
     set("page", f.page);
@@ -104,8 +109,8 @@ export const api = {
   grantsSummary: (r?: YearRange) => get<GrantSummary>("/grants-summary", yr(r)),
   grantsByProgram: (r?: YearRange) => get<GrantProgramRow[]>("/grants-by-program", yr(r)),
   grantsByAgency: (r?: YearRange) => get<GrantAgencyRow[]>("/grants-by-agency", yr(r)),
-  network: (r?: YearRange, minShared = 2, program?: string) =>
-    get<NetworkData>("/network", { ...yr(r), min_shared: minShared, program }),
+  network: (r?: YearRange, minShared = 2, program?: string, focus?: string) =>
+    get<NetworkData>("/network", { ...yr(r), min_shared: minShared, program, focus }),
   // App tier (ADR-0026) + retreat submissions. `/me` 404s when the tier is off.
   me: () => get<Me>("/me"),
   retreatThemes: (r?: YearRange) => get<RetreatReport>("/retreat/themes", yr(r)),

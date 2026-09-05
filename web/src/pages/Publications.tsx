@@ -163,7 +163,7 @@ export function Publications({ range }: { range: YearRange }) {
           </thead>
           <tbody>
             {rows.map((r) => (
-              <Row key={r.work_id} r={r} />
+              <PublicationRowView key={r.work_id} r={r} />
             ))}
             {!rows.length && !results.isFetching && (
               <tr>
@@ -193,7 +193,8 @@ export function Publications({ range }: { range: YearRange }) {
   );
 }
 
-function Row({ r }: { r: PublicationRow }) {
+// One publication table row; shared with the Strategic Foci page.
+export function PublicationRowView({ r }: { r: PublicationRow }) {
   const link = r.doi
     ? r.doi.startsWith("http")
       ? r.doi

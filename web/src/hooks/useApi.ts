@@ -15,17 +15,17 @@ export const usePublicationsByYear = (r?: YearRange, by?: "collaboration_class")
 export const useCollaborationTrend = (r?: YearRange) =>
   useQuery({ queryKey: key("trend", r), queryFn: () => api.collaborationTrend(r), enabled: !!r });
 
-export const useProgramSummary = (r?: YearRange, currentOnly = true) =>
+export const useProgramSummary = (r?: YearRange, currentOnly = true, focus?: string) =>
   useQuery({
-    queryKey: key("progsum", r, currentOnly),
-    queryFn: () => api.programSummary(r, currentOnly),
+    queryKey: key("progsum", r, `${currentOnly}:${focus ?? ""}`),
+    queryFn: () => api.programSummary(r, currentOnly, focus),
     enabled: !!r,
   });
 
-export const useCollaborationMatrix = (r?: YearRange, currentOnly = true) =>
+export const useCollaborationMatrix = (r?: YearRange, currentOnly = true, focus?: string) =>
   useQuery({
-    queryKey: key("matrix", r, currentOnly),
-    queryFn: () => api.collaborationMatrix(r, currentOnly),
+    queryKey: key("matrix", r, `${currentOnly}:${focus ?? ""}`),
+    queryFn: () => api.collaborationMatrix(r, currentOnly, focus),
     enabled: !!r,
   });
 
@@ -36,8 +36,18 @@ export const useProgramCombinations = (r?: YearRange, currentOnly = true) =>
     enabled: !!r,
   });
 
-export const useMembers = (r?: YearRange) =>
-  useQuery({ queryKey: key("members", r), queryFn: () => api.members(r), enabled: !!r });
+export const useMembers = (r?: YearRange, focus?: string, minFoci?: number) =>
+  useQuery({
+    queryKey: key("members", r, `${focus ?? ""}:${minFoci ?? ""}`),
+    queryFn: () => api.members(r, focus, minFoci),
+    enabled: !!r,
+  });
+
+export const useFoci = (r?: YearRange) =>
+  useQuery({ queryKey: key("foci", r), queryFn: () => api.foci(r), enabled: !!r });
+
+export const useFociCombinations = (r?: YearRange) =>
+  useQuery({ queryKey: key("foci_combos", r), queryFn: () => api.fociCombinations(r), enabled: !!r });
 
 export const usePublications = (filters: PublicationFilters) =>
   useQuery({
@@ -79,10 +89,10 @@ export const useMemberLinks = (id: number | undefined, linkType?: string) =>
     enabled: id !== undefined,
   });
 
-export const useNetwork = (r?: YearRange, minShared = 2, program?: string) =>
+export const useNetwork = (r?: YearRange, minShared = 2, program?: string, focus?: string) =>
   useQuery({
-    queryKey: key("network", r, `${minShared}:${program ?? ""}`),
-    queryFn: () => api.network(r, minShared, program),
+    queryKey: key("network", r, `${minShared}:${program ?? ""}:${focus ?? ""}`),
+    queryFn: () => api.network(r, minShared, program, focus),
     enabled: !!r,
   });
 

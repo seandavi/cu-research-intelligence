@@ -175,6 +175,37 @@ def _year_clause(
     return clause
 
 
+@functools.lru_cache(maxsize=1)
+def cancer_filter_available() -> bool:
+    """True when the ADR-0027 cancer-relevance labels are baked."""
+    return table_exists("pub_classification")
+
+
+def cohort_clause(alias: str = "w") -> str:
+    """Retreat cohort rule for focus counts: cancer-relevant when the ADR-0027
+    labels are baked, else no-op. Meeting abstracts are already excluded by
+    ``is_publication``."""
+    if not cancer_filter_available():
+        return "TRUE"
+    return (
+        "EXISTS (SELECT 1 FROM pub_classification pc "
+        f"WHERE pc.work_id = {alias}.work_id AND pc.is_cancer_relevant)"
+    )
+
+
+def _focus_clause(focus: str | None, alias: str = "w") -> tuple[str, list]:
+    """Predicate + bound params restricting ``alias`` to works tagged with one
+    strategic focus (``work_focus`` mart, issue #38) under :func:`cohort_clause`.
+    ``("TRUE", [])`` when unset."""
+    if not focus:
+        return "TRUE", []
+    return (
+        f"EXISTS (SELECT 1 FROM work_focus f WHERE f.work_id = {alias}.work_id AND f.focus = ?)"
+        f" AND {cohort_clause(alias)}",
+        [focus],
+    )
+
+
 # --- Headline / leadership KPIs ---------------------------------------------
 
 
@@ -264,22 +295,25 @@ def program_summary(
     min_year: int | None = None,
     max_year: int | None = None,
     current_only: bool = True,
+    focus: str | None = None,
 ) -> pl.DataFrame:
     """Per-program publication / citation / collaboration / impact rollup.
 
     A work counts toward a program if any of its cc-authors belong to it (works
     spanning programs count once per program — the CCSG convention).
-    ``current_only`` restricts to the center's active programs (default).
+    ``current_only`` restricts to the center's active programs (default);
+    ``focus`` to works tagged with one strategic focus.
     """
     yc = _year_clause(min_year, max_year)
+    fc, params = _focus_clause(focus)
     prog_filter = f"AND program IN {current_programs_sql()}" if current_only else ""
-    return run_sql(
+    return run_params(
         f"""
         WITH exploded AS (
             SELECT w.work_id, w.publication_year, w.cited_by_count, w.fwci, w.rcr,
                    w.is_inter_program, w.is_intra_program,
                    UNNEST(w.programs) AS program
-            FROM works w WHERE {yc}
+            FROM works w WHERE {yc} AND {fc}
         )
         SELECT program,
                count(DISTINCT work_id) AS publications,
@@ -290,7 +324,8 @@ def program_summary(
                round(100.0 * avg(is_intra_program::int), 1) AS pct_intra_program
         FROM exploded WHERE program IS NOT NULL {prog_filter}
         GROUP BY 1 ORDER BY publications DESC
-        """
+        """,
+        params,
     )
 
 
@@ -298,6 +333,7 @@ def program_collaboration_matrix(
     min_year: int | None = None,
     max_year: int | None = None,
     current_only: bool = True,
+    focus: str | None = None,
 ) -> pl.DataFrame:
     """Program x program co-authorship counts (symmetric).
 
@@ -310,15 +346,16 @@ def program_collaboration_matrix(
     exact. ``current_only`` restricts to the center's active programs (default).
     """
     yc = _year_clause(min_year, max_year, col="publication_year")
+    fc, params = _focus_clause(focus, alias="mw")
     prog_filter = f"AND program IN {current_programs_sql()}" if current_only else ""
-    return run_sql(
+    return run_params(
         f"""
         WITH wp AS (  -- per (work, real program): how many members of that program
             SELECT work_id, program, count(DISTINCT member_id) AS n_members
-            FROM member_works
+            FROM member_works mw
             WHERE {yc} AND program IS NOT NULL
               AND program NOT IN ('', 'Unknown/ Unaffiliated/ Emeritus')
-              {prog_filter}
+              {prog_filter} AND {fc}
             GROUP BY 1, 2
         ),
         diagonal AS (  -- intra-programmatic: a program with >=2 members on the work
@@ -333,7 +370,8 @@ def program_collaboration_matrix(
             GROUP BY 1, 2
         )
         SELECT * FROM diagonal UNION ALL SELECT * FROM offdiag ORDER BY prog_a, prog_b
-        """
+        """,
+        params,
     )
 
 
@@ -524,23 +562,56 @@ def top_topics(
 # --- Members -----------------------------------------------------------------
 
 
-def member_directory(min_year: int | None = None, max_year: int | None = None) -> pl.DataFrame:
-    """Per-member publication metrics over the window (resolved members only)."""
+def member_directory(
+    min_year: int | None = None,
+    max_year: int | None = None,
+    focus: str | None = None,
+    min_foci: int | None = None,
+) -> pl.DataFrame:
+    """Per-member publication metrics over the window (resolved members only).
+
+    Each row carries ``foci``: the strategic foci / retreat themes the member's
+    window publications are tagged with (``work_focus``, THEMES order). ``focus``
+    keeps members with ≥1 work in that focus; ``min_foci`` those whose works span
+    at least N distinct Strategic Plan foci.
+    """
+    from .retreat import FOCUS  # local: retreat imports this module
+
     yc = _year_clause(min_year, max_year, col="mw.publication_year")
-    return run_sql(
+    cohort = cohort_clause("mw")
+    conds, having = [FOCUS], []
+    if focus:
+        conds.append(focus)
+        having.append("list_contains(coalesce(mf.foci, []), ?)")
+    if min_foci:
+        conds.append(int(min_foci))
+        having.append("coalesce(mf.n_plan, 0) >= ?")
+    where = ("AND " + " AND ".join(having)) if having else ""
+    return run_params(
         f"""
+        WITH mf AS (
+            SELECT member_id, list(focus ORDER BY theme_idx) AS foci,
+                   count(*) FILTER (WHERE "group" = ?) AS n_plan
+            FROM (SELECT DISTINCT mw.member_id, f.focus, f.theme_idx, f."group"
+                  FROM member_works mw JOIN work_focus f USING (work_id)
+                  WHERE {yc} AND {cohort})
+            GROUP BY 1
+        )
         SELECT m.Member_ID AS member_id,
                m.First_Name || ' ' || m.Last_Name AS name,
                m.PrimaryProgram AS program, m.FacultyRank AS rank,
                m.Current_Status AS status, m.confidence AS match_confidence,
                count(DISTINCT mw.work_id) AS publications,
                sum(mw.cited_by_count)::BIGINT AS citations,
-               round(avg(mw.fwci), 2) AS mean_fwci
+               round(avg(mw.fwci), 2) AS mean_fwci,
+               coalesce(any_value(mf.foci), []) AS foci
         FROM members m
         LEFT JOIN member_works mw ON mw.member_id = m.Member_ID AND {yc}
-        WHERE m.author_id IS NOT NULL
+        LEFT JOIN mf ON mf.member_id = m.Member_ID
+        WHERE m.author_id IS NOT NULL {where}
         GROUP BY ALL ORDER BY publications DESC
-        """
+        """,
+        conds,
     )
 
 
@@ -579,6 +650,7 @@ def search_publications(
     author: str | None = None,
     min_citations: int | None = None,
     min_rcr: float | None = None,
+    focus: str | None = None,
     sort: str = "citations",
     descending: bool = True,
     page: int = 1,
@@ -629,6 +701,8 @@ def search_publications(
         add("w.cited_by_count >= ?", min_citations)
     if min_rcr is not None:
         add("w.rcr >= ?", min_rcr)
+    if focus:
+        add(_focus_clause(focus)[0], focus)
     if q and not fts:
         add("w.title ILIKE ?", f"%{q}%")
 
