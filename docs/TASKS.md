@@ -27,8 +27,10 @@ Status: `[ ]` todo · `[~]` in progress · `[x]` done.
 - [ ] **Grants are empty upstream** (verified snapshot + API). If OpenAlex
       restores grant data, re-run works (schema already captures `grants_json`/
       `funder_ids`); optionally add an API grants top-up for funded works.
-- [ ] Schedule the monthly deployment (`--serve --cron "0 6 5 * *"`) on a host /
-      worker; decide where the DuckDB state lives and how it's backed up
+- [x] Schedule the monthly refresh — `systemd/cu-research-refresh.timer` runs
+      `scripts/refresh.sh` (pipeline → marts → bake → redeploy) on the 5th; freshness
+      stamps on `/api/meta` + site footer. State DB stays local (`data/state/`), not
+      yet backed up
 - [ ] Cut over storage to Cloudflare R2: set `STORAGE_BASE_URI=s3://…` + `R2_*`,
       smoke-test a write, confirm DuckDB `COPY` + Polars both land objects
 - [ ] Decide new-author historical backfill policy (periodic `--full-refresh`

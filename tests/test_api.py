@@ -39,6 +39,7 @@ def test_meta_exposes_window_and_programs(client: TestClient):
     meta = client.get("/api/meta").json()
     assert meta["default_max_year"] - meta["default_min_year"] == 6  # 7-year window
     assert len(meta["current_programs"]) == 4
+    assert isinstance(meta["data_freshness"], dict)  # stamps baked by cancer_center.bake
 
 
 def test_kpi_and_program_summary(client: TestClient):

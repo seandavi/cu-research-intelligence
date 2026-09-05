@@ -118,6 +118,14 @@ def grants_available() -> bool:
     return table_exists("member_grants")
 
 
+def data_freshness() -> dict[str, str]:
+    """Freshness stamps baked by ``cancer_center.bake`` (empty on an unbaked dev DB)."""
+    if not table_exists("dataset_meta"):
+        return {}
+    df = run_sql("SELECT key, value FROM dataset_meta")
+    return dict(zip(df["key"].to_list(), df["value"].to_list(), strict=True))
+
+
 def _ensure_fts(con: duckdb.DuckDBPyConnection) -> bool:
     """Lazily build a BM25 full-text index over title + abstract.
 

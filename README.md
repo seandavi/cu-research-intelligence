@@ -58,11 +58,10 @@ Live integration tests (hit S3): `RUN_INTEGRATION=1 uv run pytest tests/test_int
 
 ## Scheduling
 
-The snapshot refreshes roughly monthly, so schedule the pipeline a few days after:
-
-```bash
-uv run python -m cu_openalex.flows.pipeline --serve --cron "0 6 5 * *"
-```
+The snapshot refreshes roughly monthly. Production runs the full chain (pipeline →
+marts → bake → redeploy) from `scripts/refresh.sh` via `systemd/cu-research-refresh.timer`
+on the 5th — see the [deployment runbook](docs/DEPLOYMENT.md#operations). The
+Prefect `--serve --cron "0 6 5 * *"` mode still exists for a worker-based setup.
 
 > **Local Prefect note.** Runs default to a local **ephemeral** backend, overriding
 > any Prefect Cloud URL in your profile. Set `CU_OPENALEX_USE_PREFECT_API=1` to use

@@ -93,14 +93,28 @@ echo | openssl s_client -connect 140.226.4.71:443 \
 ## Operations
 
 **Refresh the data.** The serving DB is baked into the image, so refreshing data
-means rebuilding + redeploying the API image (not restarting it). Rebuild the
-marts/serving DB on the host, then rebuild the image:
+means rebuilding + redeploying the API image (not restarting it). The whole chain
+(OpenAlex pipeline → dimensions → RePORTER grants → marts → membership → bake →
+`docker compose up -d --build api`) is `scripts/refresh.sh`, run monthly on the
+5th by `systemd/cu-research-refresh.timer` per the platform convention in
+`monode/infrastructure/SCHEDULING.md` (systemd `--user` timer, `TimeoutStartSec`,
+`OnFailure` → the shared `cdsci-lake-ops` ntfy topic). The live site is touched
+only by the final compose step, so an earlier failure leaves the old image up.
 
 ```bash
-export CU_OPENALEX_LAKE_BACKEND=postgres
-uv run --extra lake python -m cu_openalex.cancer_center.build   # re-bakes serving.duckdb
-docker compose up -d --build api
+# install / update the units (copy, don't symlink)
+cp systemd/cu-research-refresh.{service,timer} ~/.config/systemd/user/
+systemctl --user daemon-reload && systemctl --user enable --now cu-research-refresh.timer
+# run one by hand / watch it
+systemctl --user start cu-research-refresh.service
+journalctl --user -fu cu-research-refresh.service
 ```
+
+Or run `scripts/refresh.sh` directly with `CU_OPENALEX_LAKE_BACKEND=postgres`
+exported. Every bake stamps `dataset_meta` (works watermark, authors snapshot,
+iCite/RePORTER version, roster snapshot, `built_at`), served on `/api/meta` as
+`data_freshness` and shown in the site's sidebar footer — check there to confirm a
+refresh actually landed.
 
 Each deployed image is thus a reproducible, pinned snapshot of the data. (If you
 ever need to refresh without rebuilding the image, mount the file read-only —

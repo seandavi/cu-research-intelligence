@@ -1,0 +1,32 @@
+# Monthly full data refresh for insights.uccc.cancerdatasci.org -- an instance of
+# the platform scheduling convention in monode/infrastructure/SCHEDULING.md.
+# Install by copying (not symlinking) into ~/.config/systemd/user/.
+#
+# OnFailure reuses the shared ntfy-notify@ template already installed from
+# cdsci-lake/systemd (one implementation, one ntfy topic); it is not duplicated here.
+[Unit]
+Description=Refresh OpenAlex + lake-derived marts and redeploy the research-intelligence API
+Documentation=file:///home/davsean/Documents/git/cu-research-intelligence/docs/DEPLOYMENT.md
+After=network-online.target docker.service
+Wants=network-online.target
+OnFailure=ntfy-notify@%N.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/home/davsean/Documents/git/cu-research-intelligence
+EnvironmentFile=/home/davsean/Documents/git/cu-research-intelligence/.env
+# Prod lake for the iCite/RePORTER reads; deliberately not in .env (SCHEDULING.md).
+Environment=CU_OPENALEX_LAKE_BACKEND=postgres
+# The pipeline runs Prefect in ephemeral (no server) mode; Prefect 3 refuses that
+# unless told so. Set CU_OPENALEX_USE_PREFECT_API=1 instead to log runs to a server.
+Environment=PREFECT_SERVER_ALLOW_EPHEMERAL_MODE=true
+# systemd --user has a minimal PATH without ~/.local/bin (uv) -- add it explicitly.
+Environment=PATH=/home/davsean/.local/bin:/usr/local/bin:/usr/bin
+ExecStart=/home/davsean/Documents/git/cu-research-intelligence/scripts/refresh.sh
+# The works step streams every snapshot partition newer than the watermark from
+# S3; a month of OpenAlex updates has taken hours, a full backfill a day. 48h.
+TimeoutStartSec=172800
+Nice=10
+
+[Install]
+WantedBy=default.target

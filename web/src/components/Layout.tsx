@@ -13,9 +13,20 @@ const NAV = [
   { to: "/ask", label: "Ask" },
 ];
 
+// Footer labels for the freshness stamps in /api/meta; unknown keys are skipped.
+const FRESHNESS: [string, string][] = [
+  ["openalex_works_watermark", "OpenAlex snapshot"],
+  ["icite_version", "iCite"],
+  ["reporter_version", "NIH RePORTER"],
+  ["roster_snapshot", "Member roster"],
+  ["built_at", "Built"],
+];
+
 export function Layout() {
   const meta = useMeta();
   const nav = NAV.filter((n) => !n.needsGrants || meta.data?.grants_available);
+  const fresh = meta.data?.data_freshness ?? {};
+  const stamps = FRESHNESS.filter(([k]) => fresh[k]);
   return (
     <div className="app">
       <aside className="sidebar">
@@ -30,6 +41,16 @@ export function Layout() {
             </NavLink>
           ))}
         </nav>
+        {stamps.length > 0 && (
+          <div className="sidebar-foot">
+            <div>Data as of</div>
+            {stamps.map(([k, label]) => (
+              <div key={k}>
+                {label}: <span>{fresh[k].slice(0, 10)}</span>
+              </div>
+            ))}
+          </div>
+        )}
       </aside>
       <main className="content">
         <Suspense fallback={<div className="loading">Loading…</div>}>
