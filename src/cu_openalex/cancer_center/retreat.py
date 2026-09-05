@@ -29,6 +29,18 @@ from .programs import CURRENT_PROGRAMS
 # veto; ``article_only`` drops reviews/letters/editorials.
 FOCUS = "Strategic Plan FY26–31 focus"
 PANEL = "Keynote & panel: clinical trials"
+_PHASE_RX = r"\bphase (i|ii|iii|1|2|3|1/2|i/ii|ib|1b|2a|2b)\b"
+_DESIGN_RX = (
+    r"\b(randomi[sz]ed|placebo-controlled|double-blind|open-label|single-arm|"
+    r"first-in-human|dose[- ]escalation|dose[- ]finding)\b"
+)
+_TRIAL_EXCLUDE_TITLE = (
+    r"\b(review|guideline|consensus|meta-analys|enrollment|enrolment|participation|disparit)"
+)
+_TRIAL_EXCLUDE_TEXT = r"\b(systematic review|meta-analys)"
+# Meeting abstracts that slip through OpenAlex's type: "Abstract 6387: …", "MA08.10 …",
+# "S830 …", "1234 …" session codes at the start of the title.
+_MEETING_TITLE_RX = r"^(abstract |\d{3,5}\s|[a-z]{1,3}\d{1,3}[.\-]\d|s\d{3,4}\s)"
 THEMES: list[dict] = [
     {
         "name": "Structural, Molecular, and Cellular Biology",
@@ -161,22 +173,48 @@ THEMES: list[dict] = [
         "name": "Clinical trial reports",
         "group": PANEL,
         "terms": [],
-        "title_regex": [
-            r"\bphase (i|ii|iii|1|2|3|1/2|i/ii|ib|1b|2a|2b)\b",
-            r"\b(randomi[sz]ed|placebo-controlled|double-blind|open-label|single-arm|"
-            r"first-in-human|dose[- ]escalation|dose[- ]finding)\b",
-        ],
+        "title_regex": [_PHASE_RX, _DESIGN_RX, r"\btrials?\b"],
         "text_regex": [r"\bnct\d{8}\b"],
-        "exclude_title": r"\b(review|guideline|consensus|meta-analys)",
-        "exclude_text": r"\b(systematic review|meta-analys)",
+        "exclude_title": _TRIAL_EXCLUDE_TITLE,
+        "exclude_text": _TRIAL_EXCLUDE_TEXT,
         "article_only": True,
-        "how": "title names a trial phase or design (phase I/II/III, randomized, placebo-"
-        "controlled, double-blind, open-label, single-arm, first-in-human, dose-escalation) "
-        "or the abstract cites an NCT id; primary articles only, reviews/guidelines excluded",
+        "how": "title names a trial phase, design or 'trial' (phase I/II/III, randomized, "
+        "placebo-controlled, double-blind, open-label, single-arm, first-in-human, "
+        "dose-escalation) or the abstract cites an NCT id; primary articles only; reviews, "
+        "guidelines, meta-analyses and enrollment/participation studies excluded",
+    },
+    {
+        "name": "— of which phase I / first-in-human",
+        "group": PANEL,
+        "terms": [],
+        "title_regex": [
+            r"\bphase (i|1|ib|1b|1/2|i/ii)\b",
+            r"\b(first-in-human|dose[- ]escalation|dose[- ]finding)\b",
+        ],
+        "exclude_title": _TRIAL_EXCLUDE_TITLE,
+        "exclude_text": _TRIAL_EXCLUDE_TEXT,
+        "article_only": True,
+        "how": "trial reports whose title says phase I/Ib/I-II, first-in-human, "
+        "dose-escalation or dose-finding — the early-development slice",
+    },
+    {
+        "name": "— of which randomized / phase III",
+        "group": PANEL,
+        "terms": [],
+        "title_regex": [
+            r"\bphase (iii|3)\b",
+            r"\b(randomi[sz]ed|placebo-controlled|double-blind)\b",
+        ],
+        "exclude_title": _TRIAL_EXCLUDE_TITLE,
+        "exclude_text": _TRIAL_EXCLUDE_TEXT,
+        "article_only": True,
+        "how": "trial reports whose title says randomized, placebo-controlled, double-blind "
+        "or phase III — the late-development slice",
     },
     {
         "name": "N-of-1, patient-centric & investigator-initiated trials",
         "group": PANEL,
+        "footnote": True,  # keynote vocabulary; a topic signal, never a roster
         "terms": [
             "n-of-1",
             "n-of-one",
@@ -266,37 +304,88 @@ def cancer_filter_available() -> bool:
 
 
 def _tagged(idxs: list[int], min_year: int | None, max_year: int | None) -> tuple[str, list]:
-    """``WITH base, tagged`` prefix over the cohort's cancer-relevant publications."""
+    """``WITH … base, tagged`` prefix over the cohort's publications.
+
+    A work belongs to the cohort only through authors who were members **when it
+    was published** (earliest roster event ≤ publication year, and not departed
+    before it) — so a recruit's prior output at another center is not counted as
+    Center output. Program list and collaboration class are recomputed from those
+    authors. Meeting abstracts are dropped; ``is_cancer`` carries the ADR-0027
+    label (TRUE when the labels aren't baked) so callers can show retention.
+    """
     cases, params = _cases(idxs)
     yc = q._year_clause(min_year, max_year, col="w.publication_year")
     cancer = (
-        "AND EXISTS (SELECT 1 FROM pub_classification pc "
+        "EXISTS (SELECT 1 FROM pub_classification pc "
         "WHERE pc.work_id = w.work_id AND pc.is_cancer_relevant)"
         if cancer_filter_available()
-        else ""
+        else "TRUE"
     )
+    if q.spine_available():
+        authored = f"""
+        joined AS (
+            SELECT member_id, year(min(event_date)) AS joined_year,
+                   year(min(CASE WHEN event_type = 'departed' THEN event_date END)) AS departed_year
+            FROM member_lifecycle_event GROUP BY 1
+        ), authored AS (
+            SELECT b.work_id, list(b.m) AS cc_member_ids,
+                   list_distinct(list(mm.PrimaryProgram)) AS programs
+            FROM (SELECT work_id, publication_year, unnest(cc_member_ids) AS m
+                  FROM works w WHERE {yc} AND w.n_cc_members > 0) b
+            JOIN joined j ON j.member_id = b.m AND j.joined_year <= b.publication_year
+                 AND (j.departed_year IS NULL OR j.departed_year >= b.publication_year)
+            JOIN members mm ON mm.Member_ID = b.m
+            GROUP BY 1
+        )"""
+    else:  # no roster history: fall back to the works' own member lists
+        authored = f"""
+        authored AS (
+            SELECT work_id, cc_member_ids, programs FROM works w
+            WHERE {yc} AND w.n_cc_members > 0
+        )"""
     sql = f"""
-        WITH base AS MATERIALIZED (
-            SELECT w.work_id, w.publication_year, w.collaboration_class, w.programs,
-                   w.cc_member_ids, w.primary_topic, w.title, w.source_name, w.rcr, w.doi,
-                   w.type, lower(coalesce(w.title, '')) AS ttl,
+        WITH {authored}, base AS MATERIALIZED (
+            SELECT w.work_id, w.publication_year, a.cc_member_ids, a.programs,
+                   CASE WHEN len(list_filter(a.programs, p -> p IS NOT NULL AND p <> '')) >= 2
+                        THEN 'inter_program'
+                        WHEN len(a.cc_member_ids) >= 2 THEN 'intra_program'
+                        ELSE 'solo' END AS collaboration_class,
+                   w.primary_topic, w.title, w.source_name, w.rcr, w.doi, w.type,
+                   w.any_active_member, {cancer} AS is_cancer,
+                   lower(coalesce(w.title, '')) AS ttl,
                    lower(coalesce(w.title, '') || ' ' || coalesce(w.abstract, '')) AS txt
-            FROM works w
-            WHERE {yc} AND w.n_cc_members > 0 {cancer}
+            FROM works w JOIN authored a USING (work_id)
+            WHERE {yc} AND NOT coalesce(w.is_meeting_abstract, FALSE)
+              AND NOT regexp_matches(lower(coalesce(w.title, '')), ?)
         ), tagged AS MATERIALIZED (
             SELECT *, unnest(list_filter([{cases}], x -> x IS NOT NULL)) AS theme
             FROM base
         )"""
-    return sql, params
+    return sql, [_MEETING_TITLE_RX, *params]
 
 
 @lru_cache(maxsize=1)
 def _members() -> dict[int, dict]:
+    joined = (
+        "(SELECT member_id, year(min(event_date)) AS joined_year "
+        "FROM member_lifecycle_event GROUP BY 1)"
+        if q.spine_available()
+        else (
+            "(SELECT Member_ID AS member_id, year(Member_Type_Start_Date) AS joined_year "
+            "FROM members)"
+        )
+    )
     rows = q.run_sql(
-        "SELECT Member_ID AS member_id, First_Name || ' ' || Last_Name AS name, "
-        "PrimaryProgram AS program, is_active, (author_id IS NOT NULL) AS resolved, "
-        "confidence AS match_confidence FROM members"
+        "SELECT m.Member_ID AS member_id, m.First_Name || ' ' || m.Last_Name AS name, "
+        "m.PrimaryProgram AS program, m.is_active, (m.author_id IS NOT NULL) AS resolved, "
+        "m.confidence AS match_confidence, m.FacultyRank AS rank, j.joined_year "
+        f"FROM members m LEFT JOIN {joined} j ON j.member_id = m.Member_ID"
     ).to_dicts()
+    for r in rows:
+        rank = r["rank"] or ""
+        r["early_career"] = rank.startswith(("Assistant", "Instructor")) or (
+            r["joined_year"] is not None and r["joined_year"] >= 2020
+        )
     return {int(r["member_id"]): r for r in rows}
 
 
@@ -309,26 +398,29 @@ def themes_report(
     rows = q.run_params(
         prefix
         + """
-        SELECT theme, 'total' AS level, NULL AS key, count(*) AS n,
-               count(*) FILTER (WHERE collaboration_class = 'inter_program') AS inter
+        SELECT theme, 'total' AS level, NULL AS key,
+               count(*) FILTER (WHERE is_cancer) AS n,
+               count(*) FILTER (WHERE is_cancer AND collaboration_class = 'inter_program') AS inter,
+               count(*) AS hits,
+               count(*) FILTER (WHERE is_cancer AND any_active_member) AS active_n
         FROM tagged GROUP BY 1
         UNION ALL
-        SELECT theme, 'year', CAST(publication_year AS VARCHAR), count(*), NULL
-        FROM tagged GROUP BY 1, 3
+        SELECT theme, 'year', CAST(publication_year AS VARCHAR), count(*), NULL, NULL, NULL
+        FROM tagged WHERE is_cancer GROUP BY 1, 3
         UNION ALL
-        SELECT theme, 'program', p, count(*), NULL
-        FROM tagged, unnest(list_distinct(programs)) AS u(p) GROUP BY 1, 3
+        SELECT theme, 'program', p, count(*), NULL, NULL, NULL
+        FROM tagged, unnest(list_distinct(programs)) AS u(p) WHERE is_cancer GROUP BY 1, 3
         UNION ALL
-        SELECT theme, 'pair', a || '|' || b, count(*), NULL
+        SELECT theme, 'pair', a || '|' || b, count(*), NULL, NULL, NULL
         FROM tagged, unnest(list_distinct(programs)) AS u1(a),
                      unnest(list_distinct(programs)) AS u2(b)
-        WHERE a < b GROUP BY 1, 3
+        WHERE is_cancer AND a < b GROUP BY 1, 3
         UNION ALL
-        SELECT theme, 'member', CAST(m AS VARCHAR), count(*), NULL
-        FROM tagged, unnest(cc_member_ids) AS u(m) GROUP BY 1, 3
+        SELECT theme, 'member', CAST(m AS VARCHAR), count(*), NULL, NULL, NULL
+        FROM tagged, unnest(cc_member_ids) AS u(m) WHERE is_cancer GROUP BY 1, 3
         UNION ALL
-        SELECT theme, 'topic', primary_topic, count(*), NULL
-        FROM tagged WHERE primary_topic IS NOT NULL GROUP BY 1, 3
+        SELECT theme, 'topic', primary_topic, count(*), NULL, NULL, NULL
+        FROM tagged WHERE is_cancer AND primary_topic IS NOT NULL GROUP BY 1, 3
         """,
         params,
     ).to_dicts()
@@ -370,7 +462,10 @@ def themes_report(
                 "group": f["group"],
                 "terms": f["terms"],
                 "how": f.get("how", "any term at a word start in the title or abstract"),
+                "footnote": bool(f.get("footnote")),
                 "publications": n,
+                "keyword_hits": total["hits"] if total else 0,
+                "active_publications": total["active_n"] if total else 0,
                 "inter_program_pct": round(100 * total["inter"] / n, 1) if n else 0.0,
                 "members": len(active_rows),
                 "by_year": [
@@ -393,6 +488,9 @@ def themes_report(
                             "program",
                             "publications",
                             "match_confidence",
+                            "rank",
+                            "joined_year",
+                            "early_career",
                         )
                     }
                     for m in active_rows[:top]
@@ -421,17 +519,15 @@ def themes_report(
 
 
 def _pub(members: dict[int, dict], member_id: int) -> dict:
-    m = members.get(member_id) or {
-        "name": "?",
-        "program": None,
-        "is_active": False,
-        "match_confidence": None,
-    }
+    m = members.get(member_id) or {}
     return {
-        "name": m["name"],
-        "program": m["program"],
-        "is_active": bool(m["is_active"]),
-        "match_confidence": m["match_confidence"],
+        "name": m.get("name", "?"),
+        "program": m.get("program"),
+        "is_active": bool(m.get("is_active")),
+        "match_confidence": m.get("match_confidence"),
+        "rank": m.get("rank"),
+        "joined_year": m.get("joined_year"),
+        "early_career": bool(m.get("early_career")),
     }
 
 
@@ -445,9 +541,9 @@ def theme_works(
 ) -> list[dict]:
     """The publications behind a theme count (provenance), optionally one member's."""
     prefix, params = _tagged([theme], min_year, max_year)
-    where = ""
+    where = "WHERE is_cancer"
     if member_id is not None:
-        where = "WHERE list_contains(cc_member_ids, ?)"
+        where += " AND list_contains(cc_member_ids, ?)"
         params.append(int(member_id))
     rows = q.run_params(
         prefix
@@ -473,7 +569,8 @@ def theme_people(
     limit: int = 10,
 ) -> list[dict]:
     """Active members in the theme a given member has NOT worked with: not the
-    member, not their program, no co-authorship/co-grant spine edge."""
+    member, not their program, no co-authorship/co-grant spine edge, at least two
+    matching papers — each with their most frequent OpenAlex topic in the theme."""
     prefix, params = _tagged([theme], min_year, max_year)
     me = int(relative_to)
     members = _members()
@@ -487,24 +584,32 @@ def theme_people(
     rows = q.run_params(
         prefix
         + f"""
-        SELECT m AS member_id, count(*) AS publications
+        SELECT m AS member_id, primary_topic, count(*) AS n
         FROM tagged, unnest(cc_member_ids) AS u(m)
-        WHERE m <> ? AND m NOT IN ({linked})
-        GROUP BY 1 ORDER BY 2 DESC
+        WHERE is_cancer AND m <> ? AND m NOT IN ({linked})
+        GROUP BY 1, 2
         """,
         [*params, me, *([me, me, me] if q.spine_available() else [])],
     ).to_dicts()
-    out = []
+    per: dict[int, dict] = {}
     for r in rows:
-        m = members.get(int(r["member_id"]))
-        if not m or not m["is_active"] or m["program"] == my_program:
+        d = per.setdefault(int(r["member_id"]), {"publications": 0, "topics": {}})
+        d["publications"] += r["n"]
+        if r["primary_topic"]:
+            d["topics"][r["primary_topic"]] = d["topics"].get(r["primary_topic"], 0) + r["n"]
+    out = []
+    for mid, d in sorted(per.items(), key=lambda kv: -kv[1]["publications"]):
+        m = members.get(mid)
+        if not m or not m["is_active"] or m["program"] == my_program or d["publications"] < 2:
             continue
         out.append(
             {
-                "member_id": int(r["member_id"]),
+                "member_id": mid,
                 "name": m["name"],
                 "program": m["program"],
-                "publications": r["publications"],
+                "publications": d["publications"],
+                "top_topic": max(d["topics"], key=d["topics"].get) if d["topics"] else None,
+                "early_career": bool(m["early_career"]),
             }
         )
         if len(out) >= limit:

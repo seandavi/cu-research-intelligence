@@ -293,7 +293,10 @@ export interface RetreatTheme {
   group: string;
   terms: string[];
   how: string;
+  footnote: boolean;
   publications: number;
+  keyword_hits: number;
+  active_publications: number;
   inter_program_pct: number;
   members: number;
   by_year: { year: number; publications: number }[];
@@ -305,6 +308,9 @@ export interface RetreatTheme {
     program: string | null;
     publications: number;
     match_confidence: string | null;
+    rank: string | null;
+    joined_year: number | null;
+    early_career: boolean;
   }[];
   top_topics: { topic: string; publications: number }[];
 }
@@ -337,6 +343,8 @@ export interface RetreatPerson {
   name: string;
   program: string | null;
   publications: number;
+  top_topic: string | null;
+  early_career: boolean;
 }
 
 export type RetreatKind = "abstract" | "question" | "registration";
@@ -357,6 +365,8 @@ export interface RetreatEntry {
   decided_by: string | null;
   decided_at: string | null;
   extra: Record<string, string>;
+  import_file: string | null;
+  imported_at: string | null;
   created_at: string;
   updated_at: string;
   themes: string[];

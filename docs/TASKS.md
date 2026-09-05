@@ -157,6 +157,27 @@ Live at https://insights.uccc.cancerdatasci.org (app tier + Google OIDC deployed
       reviews), fiscal-year windows, curated-vs-OpenAlex provenance/mode switch,
       DT2/DT4-aligned exports. Do with Michaela + reporting stakeholders.
 
+## Milestone 8 — Scientific Retreat 2026 (#33, `feat/retreat-2026`)
+
+Nov 20, 2026 all-center retreat; abstracts due Sept 14, decisions Oct 21. Sources
+and the Strategic Plan foci (quoted from the retreat page): `docs/retreat-2026-research.md`.
+
+- [x] Themes lens `cancer_center/retreat.py` + `GET /api/retreat/themes` — the five
+      Strategic Plan foci + two keynote themes over cancer-relevant member works
+      (`pub_classification` now baked); per program / pair / year / member / topic;
+      provenance (`/themes/{i}/works`) and people-to-meet (`/themes/{i}/people`).
+- [x] Submissions store `app/retreat.py` (`retreat_entry`): CSV importer with
+      `--map`, upsert by form response id, role-scoped visibility, decision audit.
+- [x] `/retreat` page; two persona-review rounds (external EAB reviewer, chair,
+      research admin, member PI, panel moderator) drove the design.
+- [ ] Session builder (decision → session slot, capacity, program mix) and draft
+      agenda export
+- [ ] Panelist evidence beyond publications: NIH trial grants, author position,
+      early-career flag; CTO/OnCore or ClinicalTrials.gov PI-ship (new data domain)
+- [ ] Reviewer assignment + scoring for abstracts; program-book export
+- [ ] Self-serve identity claim so non-member lab staff can see their submissions
+- [ ] Replace keyword themes with classifier labels when ADR-0027 stage 2 lands
+
 ## Backlog / ideas
 
 - [ ] Compact the append-only `ingested_run` history; partition retention policy

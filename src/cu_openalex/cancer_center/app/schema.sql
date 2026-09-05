@@ -52,7 +52,7 @@ CREATE TABLE IF NOT EXISTS pub_correction (
 CREATE TABLE IF NOT EXISTS retreat_entry (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     kind       TEXT NOT NULL CHECK (kind IN ('abstract', 'question', 'registration')),
-    source_id  TEXT,                        -- the form's own response id, when exported
+    source_id  TEXT,                        -- "<form label>:<response id>" (ids restart per form)
     name       TEXT NOT NULL,
     email      TEXT,
     member_id  BIGINT,                      -- nullable: lab members, guests, unmatched emails
@@ -65,6 +65,8 @@ CREATE TABLE IF NOT EXISTS retreat_entry (
     decided_by BIGINT REFERENCES app_user (id),
     decided_at TIMESTAMPTZ,
     extra      JSONB NOT NULL DEFAULT '{}',
+    import_file TEXT,                       -- provenance: the export that created/updated the row
+    imported_at TIMESTAMPTZ,
     created_by BIGINT REFERENCES app_user (id),
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),

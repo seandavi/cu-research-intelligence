@@ -155,3 +155,4 @@ tr.sel td { background: #eef2f7; }
 .worklist { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; line-height: 1.45; }
 td.group { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 0.6rem; }
 li.starred { font-weight: 600; }
+.badge.ec { background: #e0f2e9; color: #1f6f3c; margin-left: 0.35rem; }

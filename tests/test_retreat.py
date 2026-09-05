@@ -17,7 +17,7 @@ needs_data = pytest.mark.skipif(
 
 def test_match_themes():
     trials = "Clinical trial reports"
-    assert retreat.match_themes("A randomized phase II trial of X in NSCLC") == [trials]
+    assert trials in retreat.match_themes("A randomized phase II trial of X in NSCLC")
     # reviews/guidelines that merely mention a design are not trial reports
     assert trials not in retreat.match_themes("A review of randomized trials in NSCLC")
     # an NCT id in the abstract counts even without a phase term in the title
@@ -39,14 +39,16 @@ def test_themes_report_and_api():
     assert [t["name"] for t in themes] == [t["name"] for t in retreat.THEMES]
     ct = themes[[t["name"] for t in themes].index("Clinical trial reports")]
     assert ct["publications"] > 0 and 0 <= ct["inter_program_pct"] <= 100
-    assert ct["top_members"][0]["match_confidence"] in {"high", "medium", "low", None}
+    assert ct["keyword_hits"] >= ct["publications"] >= ct["active_publications"]
+    top = ct["top_members"][0]
+    assert top["match_confidence"] in {"high", "medium", "low", None}
+    assert top["joined_year"] is None or top["joined_year"] <= report["window"]["max_year"]
     assert {p["program"] for p in ct["by_program"]} == set(retreat.CURRENT_PROGRAMS)
     assert len(ct["pairs"]) == 6 and ct["by_year"]
     assert ct["top_members"] and ct["top_members"][0]["publications"] > 0
     assert ct["top_topics"]
 
     # provenance: the member's theme works exist and are within the window
-    top = ct["top_members"][0]
     works = retreat.theme_works(0, member_id=top["member_id"])
     assert 0 < len(works) <= top["publications"]
     assert all(report["window"]["min_year"] <= w["publication_year"] for w in works)
@@ -93,47 +95,72 @@ async def test_import_csv_upserts_scopes_and_audits(pool, tmp_path: Path):
 
     csv = tmp_path / "abstracts.csv"
     csv.write_text(
-        "Response ID,Presenter,Email,Abstract title,Abstract,Preferred format,Lab PI\n"
-        "r1,A Person,pytest-a@example.edu,A phase II clinical trial of X,Abstract text,Oral,Dr Q\n"
-        "r2,B Person,pytest-b@example.edu,Organoid models,More text,Poster,Dr R\n"
-        "r3,C Person,pytest-c@example.edu,,,Poster,Dr S\n"
+        "ID,Presenter,Email,Abstract title,Abstract,Preferred format,Lab PI\n"
+        "1,A Person,pytest-a@example.edu,A phase II trial of X,Abstract text,Oral,Dr Q\n"
+        "2,B Person,pytest-b@example.edu,Organoid models,More text,Poster,Dr R\n"
+        "3,C Person,pytest-c@example.edu,,,Poster,Dr S\n"
         ",,,,,,\n"
     )
     mapping = {
-        "Response ID": "source_id",
+        "ID": "source_id",
         "Presenter": "name",
         "Abstract title": "title",
         "Abstract": "body",
         "Preferred format": "category",
     }
-    first = await store.import_csv(pool, csv, "abstract", mapping)
-    assert first == {"imported": 2, "updated": 0, "skipped": 2, "unmapped": ["Lab PI"]}
+    # form ids restart per form, so mapping source_id without a form label is refused
+    with pytest.raises(ValueError):
+        await store.import_csv(pool, csv, "abstract", mapping)
+    first = await store.import_csv(pool, csv, "abstract", mapping, form="abstracts")
+    assert (first["imported"], first["updated"], first["unmapped"]) == (2, 0, ["Lab PI"])
+    assert first["skipped"] == [{"row": 3, "reason": "no title or abstract text"}]
     # a re-export updates in place (same response ids), never duplicates
     csv.write_text(csv.read_text().replace("Organoid models", "Organoid models v2"))
-    assert (await store.import_csv(pool, csv, "abstract", mapping))["updated"] == 2
+    assert (await store.import_csv(pool, csv, "abstract", mapping, form="abstracts"))[
+        "updated"
+    ] == 2
+    # a second form whose ids also start at 1 must NOT overwrite the first form's rows
+    other = tmp_path / "other.csv"
+    other.write_text(
+        "ID,Presenter,Email,Abstract title,Abstract,Preferred format\n"
+        "1,D Person,pytest-d@example.edu,Something else,Text,Poster\n"
+    )
+    assert (await store.import_csv(pool, other, "abstract", mapping, form="late"))["imported"] == 1
+    # Excel-style cp1252 export still loads
+    latin = tmp_path / "latin.csv"
+    latin.write_bytes(
+        "ID,Presenter,Email,Abstract title,Abstract\n"
+        "9,É Person,pytest-e@example.edu,Café study,Text\n".encode("cp1252")
+    )
+    assert (await store.import_csv(pool, latin, "abstract", mapping, form="latin"))["imported"] == 1
 
     organizer = {"user_id": None, "email": "pytest-org@example.edu"}
-    rows = [
-        r
-        for r in await store.list_entries(pool, "abstract", viewer=organizer, organizer=True)
-        if (r["email"] or "").startswith("pytest-")
-    ]
+    rows = await store.list_entries(pool, "abstract", viewer=organizer, organizer=True)
+    rows = [r for r in rows if (r["email"] or "").startswith("pytest-")]
     by_title = {r["title"]: r for r in rows}
-    assert set(by_title) == {"A phase II clinical trial of X", "Organoid models v2"}
-    assert by_title["A phase II clinical trial of X"]["themes"] == ["Clinical trial reports"]
-    assert by_title["A phase II clinical trial of X"]["extra"] == {"lab pi": "Dr Q"}
+    assert set(by_title) == {
+        "A phase II trial of X",
+        "Organoid models v2",
+        "Something else",
+        "Café study",
+    }
+    assert by_title["A phase II trial of X"]["themes"] == ["Clinical trial reports"]
+    assert by_title["A phase II trial of X"]["extra"] == {"lab pi": "Dr Q"}
+    assert by_title["A phase II trial of X"]["source_id"] == "abstracts:1"
+    assert by_title["Something else"]["import_file"] == "other.csv"
 
-    # decision carries an audit stamp
+    # decision carries an audit stamp and survives a re-import
     entry_id = by_title["Organoid models v2"]["id"]
     assert await store.set_decision(
         pool, entry_id, decision="poster", category=None, decided_by=None
     )
     assert not await store.set_decision(pool, -1, decision="poster", category=None, decided_by=None)
+    await store.import_csv(pool, csv, "abstract", mapping, form="abstracts")
     rows = await store.list_entries(pool, "abstract", viewer=organizer, organizer=True)
     row = next(r for r in rows if r["id"] == entry_id)
     assert row["decision"] == "poster" and row["decided_at"]
 
-    # a non-organizer sees only their own abstract, and questions anonymized
+    # a non-organizer sees only their own abstract, and questions anonymized (text + topic only)
     await store.add_entry(
         pool,
         kind="question",
@@ -145,7 +172,8 @@ async def test_import_csv_upserts_scopes_and_audits(pool, tmp_path: Path):
     mine = await store.list_entries(pool, viewer={"user_id": None, "email": "PYTEST-A@example.edu"})
     mine = [r for r in mine if r["kind"] != "question" or "N-of-1" in (r["body"] or "")]
     assert {(r["kind"], r["mine"]) for r in mine} == {("abstract", True), ("question", False)}
-    assert next(r for r in mine if r["kind"] == "question")["name"] == ""
+    anon = next(r for r in mine if r["kind"] == "question")
+    assert anon["name"] == "" and anon["program"] is None and anon["decision"] is None
     assert all(
         (r["email"] or "").lower() == "pytest-a@example.edu"
         for r in mine

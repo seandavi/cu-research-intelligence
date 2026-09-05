@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
-import type { RetreatEntry, RetreatTheme, YearRange } from "../api/types";
+import type { RetreatEntry, RetreatTheme, RetreatWork, YearRange } from "../api/types";
 import { Card, ErrorNote, KpiCard, Loading } from "../components/ui";
 import {
   useMe,
@@ -27,6 +27,9 @@ const PANEL_TOPICS = [
 ];
 const DECISIONS = ["oral", "discussion", "poster", "declined"];
 const QUESTION_DECISIONS = ["star", "ask live", "merged", "declined"];
+// Run-of-show order for panel questions.
+const Q_WEIGHT: Record<string, number> = { "ask live": 0, star: 1, "": 2, merged: 3, declined: 4 };
+const EC = <span className="badge ec" title="Assistant professor / instructor, or joined 2020 or later">early-career</span>;
 const daysUntil = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 const short = (p: string | null) => (p ?? "").split(" ").map((w) => w[0]).join("");
 const fmtDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
@@ -138,6 +141,14 @@ export function Retreat({ range }: { range: YearRange }) {
                 </th>
               ))}
               <th title="Publications per year across the window">Trend</th>
+              {organizer && (
+                <>
+                  <th className="num" title="Submitted abstracts whose title/text matches the theme">Abstracts</th>
+                  <th className="num">Oral</th>
+                  <th className="num">Disc.</th>
+                  <th className="num">Poster</th>
+                </>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -145,19 +156,25 @@ export function Retreat({ range }: { range: YearRange }) {
               <>
                 {(i === 0 || themes[i - 1].group !== th.group) && (
                   <tr key={th.group}>
-                    <td colSpan={6 + programs.length} className="muted group">{th.group}</td>
+                    <td colSpan={6 + programs.length + (organizer ? 4 : 0)} className="muted group">{th.group}</td>
                   </tr>
                 )}
-              <tr key={th.name} className={`clickable ${i === sel ? "sel" : ""}`} onClick={() => setSel(i)}>
+              <tr key={th.name} className={`clickable ${i === sel ? "sel" : ""} ${th.footnote ? "muted" : ""}`} onClick={() => setSel(i)}>
                 <td>
                   {th.name}
+                  {th.footnote && <span className="termlist"> (topic signal only)</span>}
                   {showHow && (
                     <div className="termlist">
                       {th.terms.length ? th.terms.join(" · ") + (th.how.startsWith("any term") ? "" : ` — ${th.how}`) : th.how}
                     </div>
                   )}
                 </td>
-                <td className="num">{fmtInt(th.publications)}</td>
+                <td className="num">
+                  {fmtInt(th.publications)}
+                  <div className="termlist" title="Keyword hits before the cancer-relevance filter · counted works with a current member author">
+                    of {fmtInt(th.keyword_hits)} hits · {fmtInt(th.active_publications)} current
+                  </div>
+                </td>
                 <td className="num">{fmtPct(th.inter_program_pct)}</td>
                 <td className="num">{fmtInt(th.members)}</td>
                 {programs.map((p) => (
@@ -168,6 +185,16 @@ export function Retreat({ range }: { range: YearRange }) {
                 <td>
                   <Spark data={th.by_year} />
                 </td>
+                {organizer && (
+                  <>
+                    <td className="num">{fmtInt(abstracts.filter((a) => a.themes.includes(th.name)).length)}</td>
+                    {["oral", "discussion", "poster"].map((d) => (
+                      <td key={d} className="num">
+                        {fmtInt(abstracts.filter((a) => a.themes.includes(th.name) && a.decision === d).length)}
+                      </td>
+                    ))}
+                  </>
+                )}
               </tr>
               </>
             ))}
@@ -184,6 +211,11 @@ export function Retreat({ range }: { range: YearRange }) {
           {d.cancer_filter
             ? "Only publications the deterministic cancer-relevance labeler (ADR-0027) marks cancer-relevant are counted — a high-precision, lower-bound set. "
             : "The cancer-relevance labeler is not baked into this deployment; all member publications are counted. "}
+          A member's paper counts only if they were a Center member when it was published, so a
+          recruit's earlier work elsewhere is not Center output. <em>Hits</em> is the keyword match
+          before the cancer filter; retention differs by focus (lowest for basic-science
+          vocabulary), so compare rows with that in mind. <em>Current</em> counts works with at
+          least one currently active member author. Meeting abstracts are excluded.
           Program columns count a publication under every current program with a member author,
           so they can add to more than the total; legacy programs are omitted. <em>Members</em> are
           active members only; {fmtInt(d.active_members - d.active_members_resolved)} active members
@@ -193,7 +225,7 @@ export function Retreat({ range }: { range: YearRange }) {
       </Card>
 
       {cur && (
-        <ThemeDetail theme={cur} index={sel} range={range} programs={programs} myMemberId={me.data?.member_id ?? null} />
+        <ThemeDetail theme={cur} index={sel} range={range} programs={programs} myMemberId={me.data?.member_id ?? null} minYear={window.min_year} />
       )}
 
       {!signedIn ? (
@@ -238,17 +270,34 @@ function Spark({ data }: { data: { year: number; publications: number }[] }) {
 }
 
 function ThemeDetail({
-  theme, index, range, programs, myMemberId,
-}: { theme: RetreatTheme; index: number; range: YearRange; programs: string[]; myMemberId: number | null }) {
+  theme, index, range, programs, myMemberId, minYear,
+}: { theme: RetreatTheme; index: number; range: YearRange; programs: string[]; myMemberId: number | null; minYear: number }) {
   const [member, setMember] = useState<number | undefined>();
+  const [showMine, setShowMine] = useState(false);
   const works = useRetreatThemeWorks(index, member, range);
+  const mine = useRetreatThemeWorks(index, myMemberId ?? undefined, range);
   const people = useRetreatPeople(index, myMemberId, range);
   const shown = theme.top_members.find((m) => m.member_id === member);
+  const noList = theme.top_members.length === 0 || theme.top_members[0].publications < 2;
   return (
     <>
+      {myMemberId != null && (
+        <Card title={`You in this theme — ${theme.name}`}>
+          {mine.isLoading ? <Loading /> : (
+            <p className="muted">
+              {(mine.data ?? []).length === 0
+                ? "None of your counted papers matches this theme's terms in the selected years."
+                : <>{(mine.data ?? []).length} of your papers match. <a href="#" onClick={(e) => { e.preventDefault(); setShowMine((v) => !v); }}>{showMine ? "Hide" : "Show"}</a></>}
+            </p>
+          )}
+          {showMine && <WorkList works={mine.data ?? []} />}
+        </Card>
+      )}
+
       <div className="grid3">
         <Card title="Current members with the most matching papers">
-          <table className="data compact">
+          {noList && <p className="muted">Too few matching papers per member to rank anyone; use the theme's paper list instead.</p>}
+          <table className="data compact" hidden={noList}>
             <tbody>
               {theme.top_members.map((m) => (
                 <tr key={m.member_id} className={`clickable ${m.member_id === member ? "sel" : ""}`} onClick={() => setMember(m.member_id === member ? undefined : m.member_id)}>
@@ -257,6 +306,11 @@ function ThemeDetail({
                     {m.match_confidence !== "high" && (
                       <span className="badge medium" title="Name-based OpenAlex match (no ORCID); papers may include a namesake's">?</span>
                     )}
+                    {m.early_career && EC}
+                    <div className="termlist">
+                      {m.rank ?? ""}{m.joined_year ? ` · member since ${m.joined_year}` : ""}
+                      {m.joined_year && m.joined_year > minYear ? " (joined inside the window)" : ""}
+                    </div>
                   </td>
                   <td className="muted">{short(m.program)}</td>
                   <td className="num">{fmtInt(m.publications)}</td>
@@ -276,6 +330,9 @@ function ThemeDetail({
                   </td>
                   <td className={`num ${p.publications === 0 ? "zero" : ""}`}>
                     {p.publications === 0 ? "none yet" : fmtInt(p.publications)}
+                    {p.publications > 0 && theme.publications > 0 && (
+                      <span className="termlist"> · {fmtPct((100 * p.publications) / theme.publications)}</span>
+                    )}
                   </td>
                 </tr>
               ))}
@@ -302,20 +359,7 @@ function ThemeDetail({
 
       {shown && (
         <Card title={`${shown.name}: ${theme.name} publications (${range.minYear}–${range.maxYear})`}>
-          {works.isLoading ? <Loading /> : (
-            <ol className="worklist">
-              {(works.data ?? []).map((w) => (
-                <li key={w.work_id}>
-                  {w.doi ? <a href={`https://doi.org/${w.doi}`} target="_blank" rel="noreferrer">{w.title}</a> : w.title}{" "}
-                  <span className="muted">
-                    {w.source_name ?? ""} {w.publication_year}
-                    {w.rcr != null ? ` · RCR ${fmtNum(w.rcr, 1)}` : ""}
-                    {w.programs.length > 1 ? ` · ${w.programs.map(short).join(" + ")}` : ""}
-                  </span>
-                </li>
-              ))}
-            </ol>
-          )}
+          {works.isLoading ? <Loading /> : <WorkList works={works.data ?? []} />}
         </Card>
       )}
 
@@ -330,18 +374,37 @@ function ThemeDetail({
                   <tr key={p.member_id}>
                     <td>
                       <Link to={`/members/${p.member_id}`}>{p.name}</Link>
+                      {p.early_career && EC}
                     </td>
-                    <td className="muted">{p.program}</td>
+                    <td className="muted">{short(p.program)}</td>
+                    <td className="muted">{p.top_topic ?? ""}</td>
                     <td className="num">{fmtInt(p.publications)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
-          <p className="muted">Active members in other programs you have not co-authored or co-held a grant with.</p>
+          <p className="muted">Active members in other programs you have not co-authored or co-held a grant with, with at least two matching papers and their most frequent topic in the theme.</p>
         </Card>
       )}
     </>
+  );
+}
+
+function WorkList({ works }: { works: RetreatWork[] }) {
+  return (
+    <ol className="worklist">
+      {works.map((w) => (
+        <li key={w.work_id}>
+          {w.doi ? <a href={`https://doi.org/${w.doi}`} target="_blank" rel="noreferrer">{w.title}</a> : w.title}{" "}
+          <span className="muted">
+            {w.source_name ?? ""} {w.publication_year}
+            {w.rcr != null ? ` · RCR ${fmtNum(w.rcr, 1)}` : ""}
+            {w.programs.length > 1 ? ` · ${w.programs.map(short).join(" + ")}` : ""}
+          </span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -353,6 +416,8 @@ function themeCsv(t: RetreatTheme[], programs: string[]) {
     members: th.members,
     ...Object.fromEntries(programs.map((p) => [p, th.by_program.find((b) => b.program === p)?.publications ?? 0])),
     ...Object.fromEntries(th.pairs.map((p) => [`${short(p.a)}x${short(p.b)}`, p.publications])),
+    keyword_hits: th.keyword_hits,
+    by_current_members: th.active_publications,
   }));
 }
 
@@ -450,7 +515,8 @@ function Questions({ rows, organizer }: { rows: RetreatEntry[]; organizer: boole
     },
   });
   const byTopic = new Map<string, RetreatEntry[]>();
-  for (const r of rows) byTopic.set(r.category ?? "Other", [...(byTopic.get(r.category ?? "Other") ?? []), r]);
+  const ordered = [...rows].sort((a, b) => (Q_WEIGHT[a.decision ?? ""] ?? 2) - (Q_WEIGHT[b.decision ?? ""] ?? 2));
+  for (const r of ordered) byTopic.set(r.category ?? "Other", [...(byTopic.get(r.category ?? "Other") ?? []), r]);
   return (
     <Card
       title={`Panel questions — Future of Cancer Clinical Trials (${rows.length})`}
@@ -543,5 +609,7 @@ const flat = (r: RetreatEntry) => ({
   decided_at: r.decided_at,
   themes: r.themes.join("; "),
   created_at: r.created_at,
+  import_file: r.import_file,
+  imported_at: r.imported_at,
   ...r.extra,
 });
