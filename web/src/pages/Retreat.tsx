@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { RetreatEntry, RetreatTheme, RetreatWork, YearRange } from "../api/types";
-import { Card, ErrorNote, KpiCard, Loading } from "../components/ui";
+import { Card, ErrorNote, KpiCard, Loading, YearFilter } from "../components/ui";
 import {
   useMe,
   useMeta,
@@ -15,6 +15,9 @@ import {
 import { downloadCsv, fmtInt, fmtNum, fmtPct } from "../lib/format";
 
 const RETREAT_DATE = "2026-11-20";
+// The retreat looks at recent work: its own window starts in 2023 (the committee's
+// ask), independent of the site-wide seven-year default.
+const RETREAT_MIN_YEAR = 2023;
 const ABSTRACT_DEADLINE = "2026-09-14";
 // The announcement's forms live outside this app; set when the URLs are known.
 const RETREAT_INFO_URL =
@@ -34,7 +37,8 @@ const daysUntil = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now
 const short = (p: string | null) => (p ?? "").split(" ").map((w) => w[0]).join("");
 const fmtDate = (iso: string | null) => (iso ? iso.slice(0, 10) : "");
 
-export function Retreat({ range }: { range: YearRange }) {
+export function Retreat() {
+  const [range, setRange] = useState<YearRange>({ minYear: RETREAT_MIN_YEAR, maxYear: new Date().getFullYear() });
   const meta = useMeta();
   const me = useMe();
   const report = useRetreatThemes(range);
@@ -56,6 +60,9 @@ export function Retreat({ range }: { range: YearRange }) {
 
   return (
     <>
+      <div className="topbar">
+        <YearFilter value={range} bounds={{ min: 2000, max: new Date().getFullYear() }} onChange={setRange} />
+      </div>
       <h1>Scientific Retreat 2026 — Advancing Our Strategic Vision</h1>
       <p className="lede">
         November 20, 2026. Keynote <em>The Future of Cancer Clinical Trials</em> (Razelle Kurzrock,
