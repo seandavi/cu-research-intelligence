@@ -11,6 +11,7 @@ const NAV = [
   { to: "/networks", label: "Networks" },
   { to: "/members", label: "Members" },
   { to: "/ask", label: "Ask" },
+  { to: "/retreat", label: "Retreat 2026" },
 ];
 
 export function Layout() {

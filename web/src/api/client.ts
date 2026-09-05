@@ -11,6 +11,7 @@ import type {
   InterInstTrendRow,
   Kpi,
   MatrixCell,
+  Me,
   MemberLink,
   MemberProfile,
   MemberRow,
@@ -21,6 +22,11 @@ import type {
   ProgramCombination,
   ProgramSummaryRow,
   PublicationYearRow,
+  RetreatEntries,
+  RetreatKind,
+  RetreatPerson,
+  RetreatReport,
+  RetreatWork,
   YearRange,
 } from "./types";
 
@@ -34,6 +40,16 @@ async function get<T>(path: string, params: Record<string, unknown> = {}): Promi
   const url = `${BASE}${path}${qs.toString() ? `?${qs}` : ""}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${url}`);
+  return res.json() as Promise<T>;
+}
+
+async function post<T>(path: string, body: unknown): Promise<T> {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) throw new Error(`${res.status} ${res.statusText} for ${path}`);
   return res.json() as Promise<T>;
 }
 
@@ -90,6 +106,18 @@ export const api = {
   grantsByAgency: (r?: YearRange) => get<GrantAgencyRow[]>("/grants-by-agency", yr(r)),
   network: (r?: YearRange, minShared = 2, program?: string) =>
     get<NetworkData>("/network", { ...yr(r), min_shared: minShared, program }),
+  // App tier (ADR-0026) + retreat submissions. `/me` 404s when the tier is off.
+  me: () => get<Me>("/me"),
+  retreatThemes: (r?: YearRange) => get<RetreatReport>("/retreat/themes", yr(r)),
+  retreatThemeWorks: (theme: number, memberId: number | undefined, r?: YearRange) =>
+    get<RetreatWork[]>(`/retreat/themes/${theme}/works`, { ...yr(r), member_id: memberId }),
+  retreatPeople: (theme: number, relativeTo: number, r?: YearRange) =>
+    get<RetreatPerson[]>(`/retreat/themes/${theme}/people`, { ...yr(r), relative_to: relativeTo }),
+  retreatEntries: () => get<RetreatEntries>("/retreat/entries"),
+  retreatSubmit: (body: { kind: RetreatKind; title?: string; body?: string; category?: string }) =>
+    post<{ id: number; inserted: boolean }>("/retreat/entries", body),
+  retreatDecide: (id: number, body: { decision: string | null }) =>
+    post<{ ok: boolean }>(`/retreat/entries/${id}/decision`, body),
   chat: async (question: string, history?: unknown[]): Promise<ChatResponse> => {
     const res = await fetch(`${BASE}/chat`, {
       method: "POST",

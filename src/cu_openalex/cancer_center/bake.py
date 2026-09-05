@@ -39,6 +39,8 @@ _OPTIONAL = (
     "roster_snapshot",
     "roster_snapshot_member",
     "member_link",
+    # Cancer-relevance labels (ADR-0027 stage 1), built by cancer_center.scoring.
+    "pub_classification",
 )
 
 

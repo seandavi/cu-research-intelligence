@@ -85,3 +85,26 @@ export const useNetwork = (r?: YearRange, minShared = 2, program?: string) =>
     queryFn: () => api.network(r, minShared, program),
     enabled: !!r,
   });
+
+export const useMe = () =>
+  useQuery({ queryKey: ["me"], queryFn: api.me, retry: false, staleTime: Infinity });
+
+export const useRetreatThemes = (r?: YearRange) =>
+  useQuery({ queryKey: key("retreat_themes", r), queryFn: () => api.retreatThemes(r), enabled: !!r });
+
+export const useRetreatEntries = (enabled: boolean) =>
+  useQuery({ queryKey: ["retreat_entries"], queryFn: api.retreatEntries, retry: false, enabled });
+
+export const useRetreatThemeWorks = (theme: number, memberId: number | undefined, r?: YearRange) =>
+  useQuery({
+    queryKey: key("retreat_works", r, `${theme}:${memberId ?? ""}`),
+    queryFn: () => api.retreatThemeWorks(theme, memberId, r),
+    enabled: !!r && memberId !== undefined,
+  });
+
+export const useRetreatPeople = (theme: number, relativeTo: number | null | undefined, r?: YearRange) =>
+  useQuery({
+    queryKey: key("retreat_people", r, `${theme}:${relativeTo ?? ""}`),
+    queryFn: () => api.retreatPeople(theme, relativeTo!, r),
+    enabled: !!r && relativeTo != null,
+  });

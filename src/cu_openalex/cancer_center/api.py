@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import chat, networks
+from . import chat, networks, retreat
 from . import queries as q
 from .programs import CURRENT_PROGRAMS
 
@@ -327,6 +327,50 @@ def experts(
     to that member (shared papers/grants, existing_collaborator) rather than
     excluding — the base tool for the collaborator agent."""
     return q.find_experts(q_, program=program, relative_to=relative_to, limit=limit)
+
+
+# --- Scientific retreat: themes over member output --------------------------
+
+
+@app.get("/api/retreat/themes")
+def retreat_themes(min_year: int | None = None, max_year: int | None = None) -> dict:
+    """Retreat themes mapped onto members' cancer-relevant publications: per theme
+    the total, inter-program share, per-year / per-program / program-pair counts,
+    most active current members, top OpenAlex topics — plus the denominators."""
+    return retreat.themes_report(min_year, max_year)
+
+
+@app.get("/api/retreat/themes/{theme}/works")
+def retreat_theme_works(
+    theme: int,
+    member_id: int | None = None,
+    min_year: int | None = None,
+    max_year: int | None = None,
+    limit: int = Query(50, ge=1, le=200),
+) -> list[dict]:
+    """The publications behind a theme count (provenance), optionally one member's."""
+    if not 0 <= theme < len(retreat.THEMES):
+        raise HTTPException(status_code=404, detail="no such theme")
+    return retreat.theme_works(
+        theme, member_id=member_id, min_year=min_year, max_year=max_year, limit=limit
+    )
+
+
+@app.get("/api/retreat/themes/{theme}/people")
+def retreat_theme_people(
+    theme: int,
+    relative_to: int = Query(..., description="member id of the viewer"),
+    min_year: int | None = None,
+    max_year: int | None = None,
+    limit: int = Query(10, ge=1, le=50),
+) -> list[dict]:
+    """People to meet: active members in the theme from other programs the viewer
+    has not co-authored or co-held a grant with."""
+    if not 0 <= theme < len(retreat.THEMES):
+        raise HTTPException(status_code=404, detail="no such theme")
+    return retreat.theme_people(
+        theme, relative_to=relative_to, min_year=min_year, max_year=max_year, limit=limit
+    )
 
 
 # --- Chat (NL → read-only SQL) ----------------------------------------------
