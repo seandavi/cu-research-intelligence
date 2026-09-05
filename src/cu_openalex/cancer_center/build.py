@@ -389,8 +389,12 @@ def main() -> None:
     for name, path in paths.items():
         print(f"  {name:14} -> {path}")
     if not args.no_bake:
+        # Cancer-relevance labels (ADR-0027 stage 1) are a bake input: score first so
+        # serving.duckdb always carries pub_classification for the retreat lens.
         from .bake import bake_serving_db
+        from .scoring import build_cancer_relevance
 
+        print(f"  {'pub_classification':14} -> {build_cancer_relevance()}")
         print(f"  {'serving.duckdb':14} -> {bake_serving_db()}")
 
 

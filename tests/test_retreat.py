@@ -151,10 +151,8 @@ async def test_import_csv_upserts_scopes_and_audits(pool, tmp_path: Path):
 
     # decision carries an audit stamp and survives a re-import
     entry_id = by_title["Organoid models v2"]["id"]
-    assert await store.set_decision(
-        pool, entry_id, decision="poster", category=None, decided_by=None
-    )
-    assert not await store.set_decision(pool, -1, decision="poster", category=None, decided_by=None)
+    assert await store.set_decision(pool, entry_id, decision="poster", decided_by=None)
+    assert not await store.set_decision(pool, -1, decision="poster", decided_by=None)
     await store.import_csv(pool, csv, "abstract", mapping, form="abstracts")
     rows = await store.list_entries(pool, "abstract", viewer=organizer, organizer=True)
     row = next(r for r in rows if r["id"] == entry_id)

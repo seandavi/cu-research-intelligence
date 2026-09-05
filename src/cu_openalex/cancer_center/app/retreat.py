@@ -167,15 +167,14 @@ async def set_decision(
     entry_id: int,
     *,
     decision: str | None,
-    category: str | None,
     decided_by: int | None,
 ) -> bool:
     """Organizer triage with an audit stamp; returns False if the entry doesn't exist."""
     async with pool.connection() as con:
         cur = await con.execute(
-            "UPDATE retreat_entry SET decision = %s, category = coalesce(%s, category), "
-            "decided_by = %s, decided_at = now(), updated_at = now() WHERE id = %s",
-            (decision, category, decided_by, entry_id),
+            "UPDATE retreat_entry SET decision = %s, decided_by = %s, decided_at = now(), "
+            "updated_at = now() WHERE id = %s",
+            (decision, decided_by, entry_id),
         )
         return cur.rowcount == 1
 

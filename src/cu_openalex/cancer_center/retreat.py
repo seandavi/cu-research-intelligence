@@ -258,24 +258,18 @@ def _conditions(f: dict) -> tuple[list[str], list[str]]:
     return preds, params
 
 
-def _matches(f: dict, title: str, text: str) -> bool:
-    """Python mirror of :func:`_conditions` (for submitted abstracts)."""
-    if f.get("exclude_title") and re.search(f["exclude_title"], title):
-        return False
-    if f.get("exclude_text") and re.search(f["exclude_text"], text):
-        return False
-    return (
-        any(re.search(_pattern(t), text) for t in f["terms"])
-        or any(re.search(rx, title) for rx in f.get("title_regex", []))
-        or any(re.search(rx, text) for rx in f.get("text_regex", []))
-    )
-
-
 def match_themes(title: str | None, body: str | None = None) -> list[str]:
-    """Theme names a submitted title/abstract falls under (same rules as the report)."""
+    """Theme names a submitted title/abstract falls under — evaluated by DuckDB with
+    the same CASE list as the report, so the two can never diverge."""
     ttl = (title or "").lower()
     txt = f"{ttl} {(body or '').lower()}"
-    return [f["name"] for f in THEMES if _matches(f, ttl, txt)]
+    cases, params = _cases(list(range(len(THEMES))))
+    hits = q.run_params(
+        f"SELECT list_filter([{cases}], x -> x IS NOT NULL) AS t "
+        "FROM (SELECT ? AS ttl, ? AS txt, 'article' AS type)",
+        [*params, ttl, txt],
+    )["t"][0]
+    return [THEMES[i]["name"] for i in hits]
 
 
 def _cases(idxs: list[int]) -> tuple[str, list[str]]:
@@ -421,23 +415,15 @@ def themes_report(
         UNION ALL
         SELECT theme, 'topic', primary_topic, count(*), NULL, NULL, NULL
         FROM tagged WHERE is_cancer AND primary_topic IS NOT NULL GROUP BY 1, 3
+        UNION ALL
+        SELECT -1, 'denominator', NULL, count(*) FILTER (WHERE is_cancer), NULL, count(*), NULL
+        FROM base
         """,
         params,
     ).to_dicts()
     members = _members()
     active = [m for m in members.values() if m["is_active"]]
-    yc = q._year_clause(min_year, max_year, col="w.publication_year")
-    cancer_sql = (
-        "count(*) FILTER (WHERE EXISTS (SELECT 1 FROM pub_classification pc "
-        "WHERE pc.work_id = w.work_id AND pc.is_cancer_relevant))"
-        if cancer_filter_available()
-        else "NULL"
-    )
-    denom = q.run_sql(
-        f"SELECT count(*) AS member_publications, {cancer_sql} AS cancer_relevant "
-        f"FROM works w WHERE {yc} AND w.n_cc_members > 0"
-    ).to_dicts()[0]
-
+    denom = next(r for r in rows if r["level"] == "denominator")
     themes = []
     for i, f in enumerate(THEMES):
         mine = [r for r in rows if r["theme"] == i]
@@ -506,10 +492,8 @@ def themes_report(
             "max_year": max_year if max_year is not None else q.DEFAULT_MAX_YEAR,
         },
         "denominator": {
-            "member_publications": int(denom["member_publications"]),
-            "cancer_relevant": (
-                int(denom["cancer_relevant"]) if denom["cancer_relevant"] is not None else None
-            ),
+            "member_publications": int(denom["hits"]),
+            "cancer_relevant": int(denom["n"]) if cancer_filter_available() else None,
             "cancer_filter": cancer_filter_available(),
             "active_members": len(active),
             "active_members_resolved": sum(1 for m in active if m["resolved"]),
@@ -579,7 +563,7 @@ def theme_people(
         "SELECT CASE WHEN member_a = ? THEN member_b ELSE member_a END FROM member_link "
         "WHERE member_a = ? OR member_b = ?"
         if q.spine_available()
-        else "SELECT NULL"
+        else "SELECT NULL WHERE FALSE"
     )
     rows = q.run_params(
         prefix
@@ -615,11 +599,3 @@ def theme_people(
         if len(out) >= limit:
             break
     return out
-
-
-if __name__ == "__main__":  # smallest self-check: the matcher and the live report
-    assert match_themes("A randomized phase II trial of X") == ["Clinical trial reports"]
-    assert match_themes("A review of randomized trials") == []
-    assert match_themes(None) == []
-    r = themes_report()
-    print(r["denominator"], [(t["name"][:20], t["publications"]) for t in r["themes"]])

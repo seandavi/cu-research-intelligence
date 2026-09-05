@@ -116,7 +116,7 @@ export const api = {
   retreatEntries: () => get<RetreatEntries>("/retreat/entries"),
   retreatSubmit: (body: { kind: RetreatKind; title?: string; body?: string; category?: string }) =>
     post<{ id: number; inserted: boolean }>("/retreat/entries", body),
-  retreatDecide: (id: number, body: { decision: string | null; category?: string }) =>
+  retreatDecide: (id: number, body: { decision: string | null }) =>
     post<{ ok: boolean }>(`/retreat/entries/${id}/decision`, body),
   chat: async (question: string, history?: unknown[]): Promise<ChatResponse> => {
     const res = await fetch(`${BASE}/chat`, {

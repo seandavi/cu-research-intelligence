@@ -70,6 +70,22 @@ uv run python -m cu_openalex.flows.pipeline --serve --cron "0 6 5 * *"
 > `EventsWorker`/heartbeat shutdown errors at exit — every flow still reports
 > `Completed`; running `prefect server start` or pointing at Cloud removes them.
 
+## Application tier and the retreat page
+
+With the app tier configured (ADR-0026: `UCCC_APP_*` env, Postgres overlay,
+Google OIDC) the API also serves `/api/me`, `/api/auth/*`, editable profiles,
+and the **Scientific Retreat 2026** store (`/api/retreat/entries`). The read-only
+retreat lens (`/api/retreat/themes`, `/themes/{i}/works`, `/themes/{i}/people`;
+React page `/retreat`) needs no app tier. Load the retreat's external form
+exports with:
+
+```bash
+uv run python -m cu_openalex.cancer_center.app.retreat abstract export.csv \
+    --form abstracts-2026 --map "ID=source_id" --map "Abstract title=title" --map "Abstract=body"
+```
+
+Sources for the Strategic Plan foci the lens uses: `docs/retreat-2026-research.md`.
+
 ## Configuration
 
 All settings are environment variables (prefix `CU_OPENALEX_`), read from `.env` —

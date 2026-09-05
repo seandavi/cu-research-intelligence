@@ -212,7 +212,8 @@ export function Retreat({ range }: { range: YearRange }) {
             ? "Only publications the deterministic cancer-relevance labeler (ADR-0027) marks cancer-relevant are counted — a high-precision, lower-bound set. "
             : "The cancer-relevance labeler is not baked into this deployment; all member publications are counted. "}
           A member's paper counts only if they were a Center member when it was published, so a
-          recruit's earlier work elsewhere is not Center output. <em>Hits</em> is the keyword match
+          recruit's earlier work elsewhere is not Center output (stricter than the Overview's
+          attribution; ADR-0028 proposes aligning them). <em>Hits</em> is the keyword match
           before the cancer filter; retention differs by focus (lowest for basic-science
           vocabulary), so compare rows with that in mind. <em>Current</em> counts works with at
           least one currently active member author. Meeting abstracts are excluded.

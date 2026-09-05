@@ -45,8 +45,6 @@ class CorrectionRequest(BaseModel):
 
 class RetreatEntryIn(BaseModel):
     kind: Literal["abstract", "question", "registration"] = "question"
-    name: str | None = Field(default=None, max_length=200)
-    email: str | None = Field(default=None, max_length=200)
     title: str | None = Field(default=None, max_length=500)
     body: str | None = Field(default=None, max_length=10000)
     category: str | None = Field(default=None, max_length=100)
@@ -54,7 +52,6 @@ class RetreatEntryIn(BaseModel):
 
 class RetreatDecision(BaseModel):
     decision: str | None = Field(default=None, max_length=50)
-    category: str | None = Field(default=None, max_length=100)
 
 
 @router.get("/auth/login")
@@ -178,13 +175,13 @@ async def retreat_entries(
 
 @router.post("/retreat/entries")
 async def retreat_submit(body: RetreatEntryIn, user: dict = Depends(require_login)) -> dict:
-    """Submit an entry as the logged-in user (e.g. a panel question); name/email
-    default to the login identity. ``inserted`` is False if an identical entry existed."""
+    """Submit an entry as the logged-in user (e.g. a panel question); identity comes
+    from the session, never the body. ``inserted`` is False if an identical entry existed."""
     new_id, inserted = await retreat.add_entry(
         get_pool(),
         kind=body.kind,
-        name=body.name or user["name"] or user["email"],
-        email=body.email or user["email"],
+        name=user["name"] or user["email"],
+        email=user["email"],
         title=body.title,
         body=body.body,
         category=body.category,

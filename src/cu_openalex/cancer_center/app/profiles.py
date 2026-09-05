@@ -90,4 +90,6 @@ async def list_corrections(pool: AsyncConnectionPool, member_id: int) -> list[di
                 (member_id,),
             )
         ).fetchall()
-    return [{"work_id": r[0], "action": r[1], "created_at": r[2].isoformat()} for r in rows]
+    return [
+        {"work_id": r[0], "action": r[1], "created_at": r[2].isoformat()} for r in rows
+    ]

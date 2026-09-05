@@ -157,11 +157,14 @@ def _build_identifiers(df: pl.DataFrame, crosswalk: pl.DataFrame) -> pl.DataFram
     frames.append(ilab)
 
     # Resolved OpenAlex author id from the existing crosswalk (resolve.py).
-    oa = crosswalk.filter(pl.col("author_id").is_not_null()).select(
-        pl.col("Member_ID").alias("member_id"),
-        pl.col("author_id").alias("id_value"),
-        pl.lit("openalex_author_id").alias("id_type"),
-        pl.lit("openalex_resolution").alias("source"),
+    oa = (
+        crosswalk.filter(pl.col("author_id").is_not_null())
+        .select(
+            pl.col("Member_ID").alias("member_id"),
+            pl.col("author_id").alias("id_value"),
+            pl.lit("openalex_author_id").alias("id_type"),
+            pl.lit("openalex_resolution").alias("source"),
+        )
     )
     frames.append(oa)
 
@@ -251,24 +254,15 @@ def _build_lifecycle(df: pl.DataFrame) -> pl.DataFrame:
     """Unpivot the roster's dated transition fields into an event log."""
     mid = pl.col("Member_ID").alias("member_id")
     events = [
-        df.select(
-            mid,
-            pl.lit("applied").alias("event_type"),
-            pl.col("Applied_Date").alias("event_date"),
-            pl.lit(None, dtype=pl.Utf8).alias("detail"),
-        ),
-        df.select(
-            mid,
-            pl.lit("type_effective").alias("event_type"),
-            pl.col("Member_Type_Start_Date").alias("event_date"),
-            _clean("Member_Type").alias("detail"),
-        ),
-        df.select(
-            mid,
-            pl.lit("status_effective").alias("event_type"),
-            pl.col("Current_Status_Date").alias("event_date"),
-            _clean("Current_Status").alias("detail"),
-        ),
+        df.select(mid, pl.lit("applied").alias("event_type"),
+                  pl.col("Applied_Date").alias("event_date"),
+                  pl.lit(None, dtype=pl.Utf8).alias("detail")),
+        df.select(mid, pl.lit("type_effective").alias("event_type"),
+                  pl.col("Member_Type_Start_Date").alias("event_date"),
+                  _clean("Member_Type").alias("detail")),
+        df.select(mid, pl.lit("status_effective").alias("event_type"),
+                  pl.col("Current_Status_Date").alias("event_date"),
+                  _clean("Current_Status").alias("detail")),
         # A departure is recorded only when the roster carries where/why they left;
         # the status date is the best available event date.
         df.filter(
@@ -524,9 +518,8 @@ def build_member_link(
                 "max_year": pl.Int64,
             }
         )
-    out = pl.concat(
-        [f.cast({"weight": pl.Int64, "min_year": pl.Int64, "max_year": pl.Int64}) for f in frames]
-    )
+    out = pl.concat([f.cast({"weight": pl.Int64, "min_year": pl.Int64, "max_year": pl.Int64})
+                     for f in frames])
     return out.sort(["link_type", "weight"], descending=[False, True])
 
 
@@ -570,7 +563,9 @@ def main() -> None:
     import argparse
 
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--no-bake", action="store_true", help="Skip re-baking serving.duckdb.")
+    parser.add_argument(
+        "--no-bake", action="store_true", help="Skip re-baking serving.duckdb."
+    )
     args = parser.parse_args()
 
     paths = build_membership_marts()
