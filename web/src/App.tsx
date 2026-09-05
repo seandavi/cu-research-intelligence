@@ -74,7 +74,7 @@ function WithFilter({
   return (
     <>
       <div className="topbar">
-        <YearFilter value={range} bounds={{ min: 2000, max: 2025 }} onChange={setRange} />
+        <YearFilter value={range} bounds={{ min: 2000, max: new Date().getFullYear() }} onChange={setRange} />
       </div>
       {children(range)}
     </>
