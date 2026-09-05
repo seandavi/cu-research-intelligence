@@ -308,8 +308,8 @@ def _tagged(idxs: list[int], min_year: int | None, max_year: int | None) -> tupl
     Center output. Program list and collaboration class are recomputed from those
     authors. Meeting abstracts are dropped; ``is_cancer`` carries the ADR-0027
     label (TRUE when the labels aren't baked) so callers can show retention.
+    Theme membership comes from the baked ``work_focus`` mart (:mod:`focus`).
     """
-    cases, params = _cases(idxs)
     yc = q._year_clause(min_year, max_year, col="w.publication_year")
     cancer = (
         "EXISTS (SELECT 1 FROM pub_classification pc "
@@ -347,17 +347,16 @@ def _tagged(idxs: list[int], min_year: int | None, max_year: int | None) -> tupl
                         WHEN len(a.cc_member_ids) >= 2 THEN 'intra_program'
                         ELSE 'solo' END AS collaboration_class,
                    w.primary_topic, w.title, w.source_name, w.rcr, w.doi, w.type,
-                   w.any_active_member, {cancer} AS is_cancer,
-                   lower(coalesce(w.title, '')) AS ttl,
-                   lower(coalesce(w.title, '') || ' ' || coalesce(w.abstract, '')) AS txt
+                   w.any_active_member, {cancer} AS is_cancer
             FROM works w JOIN authored a USING (work_id)
             WHERE {yc} AND NOT coalesce(w.is_meeting_abstract, FALSE)
               AND NOT regexp_matches(lower(coalesce(w.title, '')), ?)
         ), tagged AS MATERIALIZED (
-            SELECT *, unnest(list_filter([{cases}], x -> x IS NOT NULL)) AS theme
-            FROM base
+            SELECT b.*, f.theme_idx AS theme
+            FROM base b JOIN work_focus f USING (work_id)
+            WHERE f.theme_idx IN ({", ".join("?" * len(idxs))})
         )"""
-    return sql, [_MEETING_TITLE_RX, *params]
+    return sql, [_MEETING_TITLE_RX, *idxs]
 
 
 @lru_cache(maxsize=1)

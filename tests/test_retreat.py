@@ -28,6 +28,30 @@ def test_match_themes():
     assert retreat.match_themes(None) == []
 
 
+def test_work_focus_mart(tmp_path: Path, monkeypatch):
+    import polars as pl
+
+    from cu_openalex.cancer_center import focus
+
+    src = tmp_path / "works.parquet"
+    pl.DataFrame(
+        {
+            "work_id": ["W1", "W2", "W3"],
+            "title": ["A randomized phase II trial of PD-1 blockade", "Organoid models", None],
+            "abstract": [None, "chromatin remodeling in tumors", "nothing relevant"],
+            "type": ["article", "article", "article"],
+        }
+    ).write_parquet(src)
+    monkeypatch.setattr(focus, "cc_target", lambda name: str(tmp_path / f"{name}.parquet"))
+    out = pl.read_parquet(focus.build_work_focus(str(src)))
+    assert set(out.columns) == {"work_id", "theme_idx", "focus", "group"}
+    by_work = out.group_by("work_id").agg(pl.col("focus")).to_dict(as_series=False)
+    foci = dict(zip(by_work["work_id"], by_work["focus"], strict=True))
+    assert {"Immunotherapy", "Clinical trial reports"} <= set(foci["W1"])  # multi-focus work
+    assert foci["W2"] == ["Structural, Molecular, and Cellular Biology"]
+    assert "W3" not in foci
+
+
 @needs_data
 def test_themes_report_and_api():
     report = retreat.themes_report()

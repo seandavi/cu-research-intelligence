@@ -84,6 +84,8 @@ def connect() -> duckdb.DuckDBPyConnection:
         "roster_snapshot",
         "roster_snapshot_member",
         "member_link",
+        "pub_classification",
+        "work_focus",
     ):
         path = cc_target(opt)
         if Path(path).exists():

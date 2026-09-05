@@ -41,6 +41,8 @@ _OPTIONAL = (
     "member_link",
     # Cancer-relevance labels (ADR-0027 stage 1), built by cancer_center.scoring.
     "pub_classification",
+    # Strategic-focus bridge (#38), built by cancer_center.focus.
+    "work_focus",
 )
 
 
