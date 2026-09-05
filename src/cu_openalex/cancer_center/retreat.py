@@ -294,9 +294,7 @@ def _cases(idxs: list[int]) -> tuple[str, list[str]]:
     return ", ".join(cases), params
 
 
-@lru_cache(maxsize=1)
-def cancer_filter_available() -> bool:
-    return q.table_exists("pub_classification")
+cancer_filter_available = q.cancer_filter_available  # one definition (queries.py)
 
 
 def _tagged(idxs: list[int], min_year: int | None, max_year: int | None) -> tuple[str, list]:

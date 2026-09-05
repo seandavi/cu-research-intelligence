@@ -55,6 +55,8 @@ export function UpsetPlot({
         combinations={combinations}
         width={width}
         height={height}
+        // set-size bars | set labels | intersections; the 0.1 default clips program/focus names
+        widthRatios={[0.2, 0.2, 0.6]}
         selection={hover}
         onHover={setHover}
         theme="light"

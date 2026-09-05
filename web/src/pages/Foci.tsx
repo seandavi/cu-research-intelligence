@@ -15,7 +15,7 @@ import {
   useProgramSummary,
   usePublications,
 } from "../hooks/useApi";
-import { fmtInt, fmtNum, fmtPct, programColors, shorten } from "../lib/format";
+import { fmtInt, fmtNum, fmtPct, programColors, shortFocus, shorten } from "../lib/format";
 import { PublicationRowView } from "./Publications";
 
 const PAGE_SIZE = 25;
@@ -86,7 +86,9 @@ export function Foci({ range }: { range: YearRange }) {
           Publications by the exact set of Strategic Plan foci they match. Multi-focus bars are
           where the foci meet on the same paper.
         </p>
-        {combos.data && <UpsetPlot combos={combos.data} />}
+        {combos.data && (
+          <UpsetPlot combos={combos.data.map((c) => ({ ...c, programs: c.programs.map(shortFocus) }))} />
+        )}
       </Card>
 
       <div className="chips">

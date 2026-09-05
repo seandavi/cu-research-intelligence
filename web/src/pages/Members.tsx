@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import type { YearRange } from "../api/types";
 import { Card, Caveat, ErrorNote, Loading } from "../components/ui";
 import { useFoci, useMembers } from "../hooks/useApi";
-import { downloadCsv, fmtInt, fmtNum, shorten } from "../lib/format";
+import { downloadCsv, fmtInt, fmtNum, shortFocus } from "../lib/format";
 
 export function Members({ range }: { range: YearRange }) {
   const [search, setSearch] = useState("");
@@ -88,7 +88,7 @@ export function Members({ range }: { range: YearRange }) {
                 <td>
                   {r.foci.map((f) => (
                     <span key={f} className="pchip" title={f}>
-                      {shorten(f, 16)}
+                      {shortFocus(f)}
                     </span>
                   ))}
                 </td>

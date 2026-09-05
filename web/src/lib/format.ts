@@ -49,3 +49,17 @@ export function downloadCsv(input: readonly object[], filename: string): void {
   a.click();
   URL.revokeObjectURL(url);
 }
+
+/** Short labels for the strategic foci / retreat themes (full names are ~50 chars). */
+export const FOCUS_SHORT: Record<string, string> = {
+  "Structural, Molecular, and Cellular Biology": "Structural & Molecular",
+  "Cancer Evolution from Initiation through Metastatic Spread": "Cancer Evolution",
+  "Therapeutic Resistance": "Therapeutic Resistance",
+  Immunotherapy: "Immunotherapy",
+  "Cancer Interception and Survivorship": "Interception & Survivorship",
+  "Clinical trial reports": "Clinical trials",
+  "— of which phase I / first-in-human": "Phase I / FIH",
+  "— of which randomized / phase III": "Randomized / phase III",
+  "N-of-1, patient-centric & investigator-initiated trials": "N-of-1 / IIT",
+};
+export const shortFocus = (f: string) => FOCUS_SHORT[f] ?? f;
