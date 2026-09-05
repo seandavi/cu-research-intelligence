@@ -11,7 +11,6 @@ queries are sub-second over the ~136k-row works table.
 from __future__ import annotations
 
 import datetime
-
 import functools
 import threading
 from pathlib import Path
