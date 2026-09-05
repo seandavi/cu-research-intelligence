@@ -2,6 +2,7 @@
 .env
 
 # Data landing pad (local backend) and DuckDB state
+/data
 /data/
 *.duckdb
 *.duckdb.wal
