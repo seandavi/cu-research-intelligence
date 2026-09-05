@@ -52,18 +52,26 @@ CREATE TABLE IF NOT EXISTS pub_correction (
 CREATE TABLE IF NOT EXISTS retreat_entry (
     id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     kind       TEXT NOT NULL CHECK (kind IN ('abstract', 'question', 'registration')),
+    source_id  TEXT,                        -- the form's own response id, when exported
     name       TEXT NOT NULL,
     email      TEXT,
     member_id  BIGINT,                      -- nullable: lab members, guests, unmatched emails
     program    TEXT,
+    role       TEXT,                        -- member / lab member / trainee / guest (from the form)
     title      TEXT,
     body       TEXT,                        -- abstract text / question text
     category   TEXT,                        -- abstract: preferred format; question: topic area
     decision   TEXT,                        -- abstract triage: oral / discussion / poster / declined
+    decided_by BIGINT REFERENCES app_user (id),
+    decided_at TIMESTAMPTZ,
     extra      JSONB NOT NULL DEFAULT '{}',
     created_by BIGINT REFERENCES app_user (id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+    -- Re-importing a form export updates rows instead of duplicating them: the
+    -- form's response id when present, else a content hash.
+    dedup_key  TEXT GENERATED ALWAYS AS (
+        coalesce(source_id, md5(lower(coalesce(email, '')) || coalesce(title, '') || coalesce(body, '')))
+    ) STORED,
+    UNIQUE (kind, dedup_key)
 );
--- Re-importing the same form export must not duplicate rows.
-CREATE UNIQUE INDEX IF NOT EXISTS retreat_entry_dedup
-    ON retreat_entry (kind, lower(coalesce(email, '')), md5(coalesce(title, '') || coalesce(body, '')));

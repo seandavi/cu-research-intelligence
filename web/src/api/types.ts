@@ -290,12 +290,53 @@ export interface YearRange {
 
 export interface RetreatTheme {
   name: string;
+  group: string;
   terms: string[];
+  how: string;
   publications: number;
+  inter_program_pct: number;
   members: number;
-  by_program: { program: string; publications: number; members: number }[];
-  top_members: { member_id: number; name: string; program: string | null; publications: number }[];
+  by_year: { year: number; publications: number }[];
+  by_program: { program: string; publications: number }[];
+  pairs: { a: string; b: string; publications: number }[];
+  top_members: {
+    member_id: number;
+    name: string;
+    program: string | null;
+    publications: number;
+    match_confidence: string | null;
+  }[];
   top_topics: { topic: string; publications: number }[];
+}
+
+export interface RetreatReport {
+  window: { min_year: number; max_year: number };
+  denominator: {
+    member_publications: number;
+    cancer_relevant: number | null;
+    cancer_filter: boolean;
+    active_members: number;
+    active_members_resolved: number;
+  };
+  themes: RetreatTheme[];
+}
+
+export interface RetreatWork {
+  work_id: string;
+  title: string;
+  publication_year: number;
+  source_name: string | null;
+  collaboration_class: string | null;
+  rcr: number | null;
+  doi: string | null;
+  programs: string[];
+}
+
+export interface RetreatPerson {
+  member_id: number;
+  name: string;
+  program: string | null;
+  publications: number;
 }
 
 export type RetreatKind = "abstract" | "question" | "registration";
@@ -303,17 +344,28 @@ export type RetreatKind = "abstract" | "question" | "registration";
 export interface RetreatEntry {
   id: number;
   kind: RetreatKind;
+  source_id: string | null;
   name: string;
   email: string | null;
   member_id: number | null;
   program: string | null;
+  role: string | null;
   title: string | null;
   body: string | null;
   category: string | null;
   decision: string | null;
+  decided_by: string | null;
+  decided_at: string | null;
   extra: Record<string, string>;
   created_at: string;
+  updated_at: string;
   themes: string[];
+  mine: boolean;
+}
+
+export interface RetreatEntries {
+  organizer: boolean;
+  entries: RetreatEntry[];
 }
 
 export interface Me {

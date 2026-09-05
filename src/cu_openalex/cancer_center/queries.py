@@ -107,9 +107,11 @@ def run_params(sql: str, params: list) -> pl.DataFrame:
 def table_exists(name: str) -> bool:
     """True if a view/table ``name`` is registered (for optional datasets)."""
     with _LOCK:
-        n = connect().execute(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name]
-        ).fetchone()[0]
+        n = (
+            connect()
+            .execute("SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name])
+            .fetchone()[0]
+        )
     return bool(n)
 
 

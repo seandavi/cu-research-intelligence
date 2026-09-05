@@ -158,20 +158,29 @@ async def get_corrections(member_id: int) -> list[dict]:
 # --- Scientific retreat submissions (app/retreat.py) --------------------------
 
 
+def _is_organizer(user: dict) -> bool:
+    return bool({R.LEADERSHIP, R.ADMIN} & set(user["roles"]))
+
+
 @router.get("/retreat/entries")
 async def retreat_entries(
     kind: str | None = Query(None, pattern="^(abstract|question|registration)$"),
     user: dict = Depends(require_login),
-) -> list[dict]:
-    """All submissions (login required — names, emails, abstract text)."""
-    return await retreat.list_entries(get_pool(), kind)
+) -> dict:
+    """Submissions visible to the caller: everything for organizers
+    (leadership/admin); otherwise the caller's own rows + anonymized questions."""
+    organizer = _is_organizer(user)
+    return {
+        "organizer": organizer,
+        "entries": await retreat.list_entries(get_pool(), kind, viewer=user, organizer=organizer),
+    }
 
 
 @router.post("/retreat/entries")
 async def retreat_submit(body: RetreatEntryIn, user: dict = Depends(require_login)) -> dict:
     """Submit an entry as the logged-in user (e.g. a panel question); name/email
-    default to the login identity. ``duplicate`` is True if an identical entry existed."""
-    new_id = await retreat.add_entry(
+    default to the login identity. ``inserted`` is False if an identical entry existed."""
+    new_id, inserted = await retreat.add_entry(
         get_pool(),
         kind=body.kind,
         name=body.name or user["name"] or user["email"],
@@ -181,7 +190,7 @@ async def retreat_submit(body: RetreatEntryIn, user: dict = Depends(require_logi
         category=body.category,
         created_by=user["user_id"],
     )
-    return {"id": new_id, "duplicate": new_id is None}
+    return {"id": new_id, "inserted": inserted}
 
 
 @router.post("/retreat/entries/{entry_id}/decision")
@@ -190,7 +199,11 @@ async def retreat_decide(
 ) -> dict:
     """Organizer triage of an abstract (oral / discussion / poster / declined)."""
     if not await retreat.set_decision(
-        get_pool(), entry_id, decision=body.decision, category=body.category
+        get_pool(),
+        entry_id,
+        decision=body.decision,
+        category=body.category,
+        decided_by=user["user_id"],
     ):
         raise HTTPException(status_code=404, detail="entry not found")
     return {"ok": True}

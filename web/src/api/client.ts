@@ -22,9 +22,11 @@ import type {
   ProgramCombination,
   ProgramSummaryRow,
   PublicationYearRow,
-  RetreatEntry,
+  RetreatEntries,
   RetreatKind,
-  RetreatTheme,
+  RetreatPerson,
+  RetreatReport,
+  RetreatWork,
   YearRange,
 } from "./types";
 
@@ -106,10 +108,14 @@ export const api = {
     get<NetworkData>("/network", { ...yr(r), min_shared: minShared, program }),
   // App tier (ADR-0026) + retreat submissions. `/me` 404s when the tier is off.
   me: () => get<Me>("/me"),
-  retreatThemes: (r?: YearRange) => get<RetreatTheme[]>("/retreat/themes", yr(r)),
-  retreatEntries: () => get<RetreatEntry[]>("/retreat/entries"),
+  retreatThemes: (r?: YearRange) => get<RetreatReport>("/retreat/themes", yr(r)),
+  retreatThemeWorks: (theme: number, memberId: number | undefined, r?: YearRange) =>
+    get<RetreatWork[]>(`/retreat/themes/${theme}/works`, { ...yr(r), member_id: memberId }),
+  retreatPeople: (theme: number, relativeTo: number, r?: YearRange) =>
+    get<RetreatPerson[]>(`/retreat/themes/${theme}/people`, { ...yr(r), relative_to: relativeTo }),
+  retreatEntries: () => get<RetreatEntries>("/retreat/entries"),
   retreatSubmit: (body: { kind: RetreatKind; title?: string; body?: string; category?: string }) =>
-    post<{ id: number | null; duplicate: boolean }>("/retreat/entries", body),
+    post<{ id: number; inserted: boolean }>("/retreat/entries", body),
   retreatDecide: (id: number, body: { decision: string | null; category?: string }) =>
     post<{ ok: boolean }>(`/retreat/entries/${id}/decision`, body),
   chat: async (question: string, history?: unknown[]): Promise<ChatResponse> => {

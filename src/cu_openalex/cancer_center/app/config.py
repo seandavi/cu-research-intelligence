@@ -51,9 +51,7 @@ def get_app_config() -> AppConfig:
         db_user=os.environ.get("UCCC_APP_DB_USER", "uccc_app"),
         db_password=get_secret("uccc-app-db-password", env="UCCC_APP_DB_PASSWORD", default="")
         or "",
-        oidc_client_id=get_secret(
-            "cancerdatasci-oauth-client-id", env="UCCC_APP_OIDC_CLIENT_ID"
-        ),
+        oidc_client_id=get_secret("cancerdatasci-oauth-client-id", env="UCCC_APP_OIDC_CLIENT_ID"),
         oidc_client_secret=get_secret(
             "cancerdatasci-oauth-client-secret", env="UCCC_APP_OIDC_CLIENT_SECRET"
         ),

@@ -94,3 +94,17 @@ export const useRetreatThemes = (r?: YearRange) =>
 
 export const useRetreatEntries = (enabled: boolean) =>
   useQuery({ queryKey: ["retreat_entries"], queryFn: api.retreatEntries, retry: false, enabled });
+
+export const useRetreatThemeWorks = (theme: number, memberId: number | undefined, r?: YearRange) =>
+  useQuery({
+    queryKey: key("retreat_works", r, `${theme}:${memberId ?? ""}`),
+    queryFn: () => api.retreatThemeWorks(theme, memberId, r),
+    enabled: !!r && memberId !== undefined,
+  });
+
+export const useRetreatPeople = (theme: number, relativeTo: number | null | undefined, r?: YearRange) =>
+  useQuery({
+    queryKey: key("retreat_people", r, `${theme}:${relativeTo ?? ""}`),
+    queryFn: () => api.retreatPeople(theme, relativeTo!, r),
+    enabled: !!r && relativeTo != null,
+  });
