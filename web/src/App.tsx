@@ -54,7 +54,7 @@ export function App() {
         <Route path="members" element={<WithFilter range={range} setRange={setRange}>{(r) => <Members range={r} />}</WithFilter>} />
         <Route path="members/:id" element={<WithFilter range={range} setRange={setRange}>{(r) => <MemberProfile range={r} />}</WithFilter>} />
         <Route path="ask" element={<Ask />} />
-        <Route path="retreat" element={<WithFilter range={range} setRange={setRange}>{(r) => <Retreat range={r} />}</WithFilter>} />
+        <Route path="retreat" element={<Retreat />} />
       </Route>
     </Routes>
   );
