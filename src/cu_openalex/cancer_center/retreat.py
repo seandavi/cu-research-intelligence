@@ -16,6 +16,8 @@ import re
 from functools import lru_cache
 from itertools import combinations
 
+import duckdb
+
 from . import queries as q
 from .programs import CURRENT_PROGRAMS
 
@@ -264,11 +266,11 @@ def match_themes(title: str | None, body: str | None = None) -> list[str]:
     ttl = (title or "").lower()
     txt = f"{ttl} {(body or '').lower()}"
     cases, params = _cases(list(range(len(THEMES))))
-    hits = q.run_params(
-        f"SELECT list_filter([{cases}], x -> x IS NOT NULL) AS t "
+    hits = duckdb.execute(  # in-memory: needs no serving tables (offline tests, CI)
+        f"SELECT list_filter([{cases}], x -> x IS NOT NULL) "
         "FROM (SELECT ? AS ttl, ? AS txt, 'article' AS type)",
         [*params, ttl, txt],
-    )["t"][0]
+    ).fetchone()[0]
     return [THEMES[i]["name"] for i in hits]
 
 
