@@ -10,6 +10,8 @@ queries are sub-second over the ~136k-row works table.
 
 from __future__ import annotations
 
+import datetime
+
 import functools
 import threading
 from pathlib import Path
@@ -29,12 +31,14 @@ _LOCK = threading.RLock()
 
 # Headline analysis window. Recent years (>= CUTOFF_RECENT) carry an OpenAlex
 # indexing-lag caveat; trend charts annotate this.
-# Default reporting window: the most recent 7 complete years. Older years
+# Default reporting window: the most recent 7 years through the current year, so
+# the picture is current rather than frozen at the last complete year. Older years
 # intermix deprecated program structures, so reporting defaults to this window.
-DEFAULT_MAX_YEAR = 2024
-DEFAULT_MIN_YEAR = DEFAULT_MAX_YEAR - 6  # 2018–2024 inclusive (7 years)
-# Years >= this are still filling in (OpenAlex indexing lag); flagged as provisional.
-INDEXING_LAG_FROM = 2025
+DEFAULT_MAX_YEAR = datetime.date.today().year
+DEFAULT_MIN_YEAR = DEFAULT_MAX_YEAR - 6  # 7 years inclusive
+# The current year is still filling in (snapshot watermark + OpenAlex indexing lag);
+# flagged as provisional wherever it is shown.
+INDEXING_LAG_FROM = DEFAULT_MAX_YEAR
 
 
 @functools.lru_cache(maxsize=1)
@@ -107,9 +111,11 @@ def run_params(sql: str, params: list) -> pl.DataFrame:
 def table_exists(name: str) -> bool:
     """True if a view/table ``name`` is registered (for optional datasets)."""
     with _LOCK:
-        n = connect().execute(
-            "SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name]
-        ).fetchone()[0]
+        n = (
+            connect()
+            .execute("SELECT count(*) FROM information_schema.tables WHERE table_name = ?", [name])
+            .fetchone()[0]
+        )
     return bool(n)
 
 

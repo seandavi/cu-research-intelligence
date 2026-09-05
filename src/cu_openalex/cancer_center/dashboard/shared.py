@@ -92,7 +92,7 @@ def year_filter(default_min: int | None = None, default_max: int | None = None) 
     return st.sidebar.slider(
         "Publication years",
         min_value=2000,
-        max_value=2025,
+        max_value=q.DEFAULT_MAX_YEAR,
         value=(default_min or q.DEFAULT_MIN_YEAR, default_max or q.DEFAULT_MAX_YEAR),
         step=1,
         help="Default is the most recent 7 complete years (current program era).",
