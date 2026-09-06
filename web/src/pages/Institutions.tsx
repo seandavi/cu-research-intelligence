@@ -8,7 +8,7 @@ import {
   YAxis,
 } from "recharts";
 import type { YearRange } from "../api/types";
-import { Card, Caveat, ErrorNote, KpiCard, Loading } from "../components/ui";
+import { Card, Caveat, ErrorNote, KpiCard, Loading, Th, useSort } from "../components/ui";
 import { useInterInstTrend, useKpi, useTopCollaborators } from "../hooks/useApi";
 import { downloadCsv, fmtInt, fmtPct } from "../lib/format";
 
@@ -16,6 +16,7 @@ export function Institutions({ range }: { range: YearRange }) {
   const kpi = useKpi(range);
   const trend = useInterInstTrend(range);
   const collab = useTopCollaborators(range, 25);
+  const sorted = useSort(collab.data ?? []);
 
   if (kpi.isLoading || collab.isLoading) return <Loading />;
   if (kpi.error) return <ErrorNote error={kpi.error} />;
@@ -92,13 +93,13 @@ export function Institutions({ range }: { range: YearRange }) {
         <table className="data">
           <thead>
             <tr>
-              <th>Institution</th>
-              <th>Country</th>
-              <th className="num">Shared publications</th>
+              <Th k="institution" ctl={sorted}>Institution</Th>
+              <Th k="country" ctl={sorted}>Country</Th>
+              <Th k="publications" ctl={sorted} num>Shared publications</Th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((c) => (
+            {sorted.rows.map((c) => (
               <tr key={c.institution}>
                 <td>{c.institution}</td>
                 <td>{c.country ?? "—"}</td>

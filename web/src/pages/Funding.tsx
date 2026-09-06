@@ -8,7 +8,7 @@ import {
   YAxis,
 } from "recharts";
 import type { YearRange } from "../api/types";
-import { Card, Caveat, ErrorNote, KpiCard, Loading } from "../components/ui";
+import { Card, Caveat, ErrorNote, KpiCard, Loading, Th, useSort } from "../components/ui";
 import { useGrantsByAgency, useGrantsByProgram, useGrantsSummary } from "../hooks/useApi";
 import { downloadCsv, fmtInt, fmtMoney, shorten } from "../lib/format";
 
@@ -16,12 +16,13 @@ export function Funding({ range }: { range: YearRange }) {
   const summary = useGrantsSummary(range);
   const byProgram = useGrantsByProgram(range);
   const byAgency = useGrantsByAgency(range);
+  const progSort = useSort(byProgram.data ?? []);
+  const agencySort = useSort(byAgency.data ?? []);
 
   if (summary.isLoading) return <Loading />;
   if (summary.error) return <ErrorNote error={summary.error} />;
   const s = summary.data!;
   const progs = byProgram.data ?? [];
-  const agencies = byAgency.data ?? [];
 
   return (
     <>
@@ -55,13 +56,13 @@ export function Funding({ range }: { range: YearRange }) {
           <table className="data compact">
             <thead>
               <tr>
-                <th>IC</th>
-                <th className="num">Grants</th>
-                <th className="num">Total award</th>
+                <Th k="agency" ctl={agencySort}>IC</Th>
+                <Th k="grants" ctl={agencySort} num>Grants</Th>
+                <Th k="total_award" ctl={agencySort} num>Total award</Th>
               </tr>
             </thead>
             <tbody>
-              {agencies.map((a) => (
+              {agencySort.rows.map((a) => (
                 <tr key={a.agency}>
                   <td>{a.agency}</td>
                   <td className="num">{fmtInt(a.grants)}</td>
@@ -84,14 +85,14 @@ export function Funding({ range }: { range: YearRange }) {
         <table className="data">
           <thead>
             <tr>
-              <th>Program</th>
-              <th className="num">Grants</th>
-              <th className="num">Funded members</th>
-              <th className="num">Total award</th>
+              <Th k="program" ctl={progSort}>Program</Th>
+              <Th k="grants" ctl={progSort} num>Grants</Th>
+              <Th k="funded_members" ctl={progSort} num>Funded members</Th>
+              <Th k="total_award" ctl={progSort} num>Total award</Th>
             </tr>
           </thead>
           <tbody>
-            {progs.map((p) => (
+            {progSort.rows.map((p) => (
               <tr key={p.program}>
                 <td>{p.program}</td>
                 <td className="num">{fmtInt(p.grants)}</td>

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import type { PublicationFilters, PublicationRow, YearRange } from "../api/types";
-import { Card, Caveat, ErrorNote } from "../components/ui";
+import { Card, Caveat, ErrorNote, Th, type SortCtl } from "../components/ui";
 import { useMeta, usePublications } from "../hooks/useApi";
 import { track } from "../lib/analytics";
 import { downloadCsv, fmtInt, fmtNum, shorten } from "../lib/format";
@@ -58,6 +58,11 @@ export function Publications({ range }: { range: YearRange }) {
   const page = filters.page ?? 1;
   const rows = results.data?.rows ?? [];
   const selected = useMemo(() => new Set(filters.programs ?? []), [filters.programs]);
+  const serverSort: SortCtl = {
+    sort: { key: filters.sort ?? "relevance", dir: filters.descending ? -1 : 1 },
+    toggle: (key, first) =>
+      patch({ sort: key, descending: filters.sort === key ? !filters.descending : first === -1 }),
+  };
 
   return (
     <>
@@ -153,12 +158,12 @@ export function Publications({ range }: { range: YearRange }) {
         <table className="data">
           <thead>
             <tr>
-              <th>Title</th>
-              <th>Year</th>
+              <Th k="title" ctl={serverSort}>Title</Th>
+              <Th k="year" ctl={serverSort} num>Year</Th>
               <th>Journal</th>
               <th>Programs</th>
-              <th className="num">Cites</th>
-              <th className="num">RCR</th>
+              <Th k="citations" ctl={serverSort} num>Cites</Th>
+              <Th k="rcr" ctl={serverSort} num>RCR</Th>
             </tr>
           </thead>
           <tbody>

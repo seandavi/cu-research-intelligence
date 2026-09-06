@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import type { YearRange } from "../api/types";
 import { NetworkGraph } from "../components/NetworkGraph";
-import { Card, Caveat, ErrorNote, Loading } from "../components/ui";
+import { Card, Caveat, ErrorNote, Loading, Th, useSort } from "../components/ui";
 import { useMeta, useNetwork } from "../hooks/useApi";
 import { fmtInt, fmtNum, programColors } from "../lib/format";
 
@@ -22,6 +22,7 @@ export function Networks({ range }: { range: YearRange }) {
     () => [...(net.data?.nodes ?? [])].sort((a, b) => b.betweenness - a.betweenness).slice(0, 15),
     [net.data],
   );
+  const sorted = useSort(bridges);
 
   return (
     <>
@@ -58,15 +59,15 @@ export function Networks({ range }: { range: YearRange }) {
             <table className="data compact">
               <thead>
                 <tr>
-                  <th>Member</th>
-                  <th>Program</th>
-                  <th className="num">Co-authors</th>
-                  <th className="num">Betweenness</th>
-                  <th className="num">Publications</th>
+                  <Th k="name" ctl={sorted}>Member</Th>
+                  <Th k="program" ctl={sorted}>Program</Th>
+                  <Th k="degree" ctl={sorted} num>Co-authors</Th>
+                  <Th k="betweenness" ctl={sorted} num>Betweenness</Th>
+                  <Th k="publications" ctl={sorted} num>Publications</Th>
                 </tr>
               </thead>
               <tbody>
-                {bridges.map((n) => (
+                {sorted.rows.map((n) => (
                   <tr key={n.id}>
                     <td>{n.name}</td>
                     <td>{n.program}</td>

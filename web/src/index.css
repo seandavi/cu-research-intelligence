@@ -165,3 +165,9 @@ li.starred { font-weight: 600; }
 .prose { line-height: 1.55; padding-left: 1.2rem; }
 .prose li { margin-bottom: 0.45rem; }
 .diagram { font-size: 0.78rem; line-height: 1.4; overflow-x: auto; background: #f6f8fa; padding: 0.8rem 1rem; border-radius: 8px; border: 1px solid var(--line); }
+
+/* Sortable headers */
+th button.sort { all: unset; cursor: pointer; user-select: none; white-space: nowrap; color: inherit; font: inherit; }
+th button.sort:hover, th[aria-sort="ascending"] button.sort, th[aria-sort="descending"] button.sort { color: var(--ink); }
+.sort-arrow { font-size: 0.7em; margin-left: 0.3em; opacity: 0.35; }
+th[aria-sort="ascending"] .sort-arrow, th[aria-sort="descending"] .sort-arrow { opacity: 1; }

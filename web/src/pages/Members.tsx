@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { YearRange } from "../api/types";
-import { Card, Caveat, ErrorNote, Loading } from "../components/ui";
+import { Card, Caveat, ErrorNote, Loading, Th, useSort } from "../components/ui";
 import { useMembers, useRetreatThemes } from "../hooks/useApi";
 import { downloadCsv, fmtInt, fmtNum, shortFocus } from "../lib/format";
 
@@ -23,6 +23,8 @@ export function Members({ range }: { range: YearRange }) {
       (program === "All" || r.program === program) &&
       (!search || r.name.toLowerCase().includes(search.toLowerCase())),
   );
+
+  const sorted = useSort(filtered);
 
   if (members.isLoading) return <Loading />;
   if (members.error) return <ErrorNote error={members.error} />;
@@ -62,19 +64,19 @@ export function Members({ range }: { range: YearRange }) {
         <table className="data">
           <thead>
             <tr>
-              <th>Name</th>
-              <th>Program</th>
-              <th>Rank</th>
-              <th>Status</th>
-              <th>Match</th>
-              <th>Foci</th>
-              <th className="num">Publications</th>
-              <th className="num">Citations</th>
-              <th className="num">Mean FWCI</th>
+              <Th k="name" ctl={sorted}>Name</Th>
+              <Th k="program" ctl={sorted}>Program</Th>
+              <Th k="rank" ctl={sorted}>Rank</Th>
+              <Th k="status" ctl={sorted}>Status</Th>
+              <Th k="match_confidence" ctl={sorted}>Match</Th>
+              <Th k="foci" ctl={sorted} title="Sorts by number of foci">Foci</Th>
+              <Th k="publications" ctl={sorted} num>Publications</Th>
+              <Th k="citations" ctl={sorted} num>Citations</Th>
+              <Th k="mean_fwci" ctl={sorted} num>Mean FWCI</Th>
             </tr>
           </thead>
           <tbody>
-            {filtered.map((r) => (
+            {sorted.rows.map((r) => (
               <tr key={r.member_id}>
                 <td>
                   <Link to={`/members/${r.member_id}`}>{r.name}</Link>
