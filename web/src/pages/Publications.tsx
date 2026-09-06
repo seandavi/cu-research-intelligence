@@ -102,7 +102,7 @@ export function Publications({ range }: { range: YearRange }) {
           </select>
           <select
             value={filters.sort}
-            onChange={(e) => patch({ sort: e.target.value })}
+            onChange={(e) => patch({ sort: e.target.value, descending: e.target.value !== "title" })}
           >
             <option value="relevance">Sort: Relevance</option>
             <option value="citations">Sort: Citations</option>

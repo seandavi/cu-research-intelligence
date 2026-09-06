@@ -144,7 +144,7 @@ export function Th({
     >
       <button className="sort" onClick={() => ctl.toggle(k, num ? -1 : 1)}>
         {children}
-        <span className="sort-arrow">{dir === 1 ? "▲" : dir === -1 ? "▼" : "⇅"}</span>
+        <span className="sort-arrow" aria-hidden>{dir === 1 ? "▲" : dir === -1 ? "▼" : "⇅"}</span>
       </button>
     </th>
   );

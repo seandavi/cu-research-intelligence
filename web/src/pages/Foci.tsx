@@ -375,7 +375,7 @@ export function Foci({ range }: { range: YearRange }) {
           >
             <div className="filters">
               <input placeholder="Search title & abstract…" value={text} onChange={(e) => setText(e.target.value)} style={{ minWidth: 240 }} />
-              <select value={filters.sort} onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value, page: 1 }))}>
+              <select value={filters.sort} onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value, descending: e.target.value !== "title", page: 1 }))}>
                 <option value="citations">Sort: Citations</option>
                 <option value="rcr">Sort: RCR</option>
                 <option value="fwci">Sort: FWCI</option>
