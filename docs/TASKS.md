@@ -172,6 +172,7 @@ and the Strategic Plan foci (quoted from the retreat page): `docs/retreat-2026-r
       `--map`, upsert by form response id, role-scoped visibility, decision audit.
 - [x] `/retreat` page; two persona-review rounds (external EAB reviewer, chair,
       research admin, member PI, panel moderator) drove the design.
+- [x] Folded into `/foci` (#41): one page for foci; `/retreat` redirects there.
 - [ ] Session builder (decision → session slot, capacity, program mix) and draft
       agenda export
 - [ ] Panelist evidence beyond publications: NIH trial grants, author position,

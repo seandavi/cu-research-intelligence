@@ -43,9 +43,6 @@ export const useMembers = (r?: YearRange, focus?: string, minFoci?: number) =>
     enabled: !!r,
   });
 
-export const useFoci = (r?: YearRange) =>
-  useQuery({ queryKey: key("foci", r), queryFn: () => api.foci(r), enabled: !!r });
-
 export const useFociCombinations = (r?: YearRange) =>
   useQuery({ queryKey: key("foci_combos", r), queryFn: () => api.fociCombinations(r), enabled: !!r });
 

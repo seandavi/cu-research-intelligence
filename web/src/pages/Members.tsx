@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { YearRange } from "../api/types";
 import { Card, Caveat, ErrorNote, Loading } from "../components/ui";
-import { useFoci, useMembers } from "../hooks/useApi";
+import { useMembers, useRetreatThemes } from "../hooks/useApi";
 import { downloadCsv, fmtInt, fmtNum, shortFocus } from "../lib/format";
 
 export function Members({ range }: { range: YearRange }) {
@@ -11,7 +11,7 @@ export function Members({ range }: { range: YearRange }) {
   const [focus, setFocus] = useState("");
   const [multiFoci, setMultiFoci] = useState(false);
   const members = useMembers(range, focus || undefined, multiFoci ? 2 : undefined);
-  const foci = useFoci(range);
+  const foci = useRetreatThemes(range);
 
   const rows = members.data ?? [];
   const programs = useMemo(
@@ -44,7 +44,7 @@ export function Members({ range }: { range: YearRange }) {
         </select>
         <select value={focus} onChange={(e) => setFocus(e.target.value)}>
           <option value="">Any focus</option>
-          {(foci.data ?? []).map((f) => (
+          {(foci.data?.themes ?? []).map((f) => (
             <option key={f.name} value={f.name}>
               {f.name}
             </option>

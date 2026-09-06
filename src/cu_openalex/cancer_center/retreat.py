@@ -344,8 +344,8 @@ def _tagged(idxs: list[int], min_year: int | None, max_year: int | None) -> tupl
                         THEN 'inter_program'
                         WHEN len(a.cc_member_ids) >= 2 THEN 'intra_program'
                         ELSE 'solo' END AS collaboration_class,
-                   w.primary_topic, w.title, w.source_name, w.rcr, w.doi, w.type,
-                   w.any_active_member, {cancer} AS is_cancer
+                   w.primary_topic, w.title, w.source_name, w.rcr, w.nih_percentile,
+                   w.doi, w.type, w.any_active_member, {cancer} AS is_cancer
             FROM works w JOIN authored a USING (work_id)
             WHERE {yc} AND NOT coalesce(w.is_meeting_abstract, FALSE)
               AND NOT regexp_matches(lower(coalesce(w.title, '')), ?)
@@ -395,27 +395,32 @@ def themes_report(
                count(*) FILTER (WHERE is_cancer) AS n,
                count(*) FILTER (WHERE is_cancer AND collaboration_class = 'inter_program') AS inter,
                count(*) AS hits,
-               count(*) FILTER (WHERE is_cancer AND any_active_member) AS active_n
+               count(*) FILTER (WHERE is_cancer AND any_active_member) AS active_n,
+               round(median(rcr) FILTER (WHERE is_cancer), 2) AS median_rcr,
+               round(100.0 * avg((nih_percentile >= 90)::int) FILTER (WHERE is_cancer), 1)
+                   AS pct_top_10
         FROM tagged GROUP BY 1
         UNION ALL
-        SELECT theme, 'year', CAST(publication_year AS VARCHAR), count(*), NULL, NULL, NULL
+        SELECT theme, 'year', CAST(publication_year AS VARCHAR), count(*), NULL, NULL, NULL,
+               NULL, NULL
         FROM tagged WHERE is_cancer GROUP BY 1, 3
         UNION ALL
-        SELECT theme, 'program', p, count(*), NULL, NULL, NULL
+        SELECT theme, 'program', p, count(*), NULL, NULL, NULL, NULL, NULL
         FROM tagged, unnest(list_distinct(programs)) AS u(p) WHERE is_cancer GROUP BY 1, 3
         UNION ALL
-        SELECT theme, 'pair', a || '|' || b, count(*), NULL, NULL, NULL
+        SELECT theme, 'pair', a || '|' || b, count(*), NULL, NULL, NULL, NULL, NULL
         FROM tagged, unnest(list_distinct(programs)) AS u1(a),
                      unnest(list_distinct(programs)) AS u2(b)
         WHERE is_cancer AND a < b GROUP BY 1, 3
         UNION ALL
-        SELECT theme, 'member', CAST(m AS VARCHAR), count(*), NULL, NULL, NULL
+        SELECT theme, 'member', CAST(m AS VARCHAR), count(*), NULL, NULL, NULL, NULL, NULL
         FROM tagged, unnest(cc_member_ids) AS u(m) WHERE is_cancer GROUP BY 1, 3
         UNION ALL
-        SELECT theme, 'topic', primary_topic, count(*), NULL, NULL, NULL
+        SELECT theme, 'topic', primary_topic, count(*), NULL, NULL, NULL, NULL, NULL
         FROM tagged WHERE is_cancer AND primary_topic IS NOT NULL GROUP BY 1, 3
         UNION ALL
-        SELECT -1, 'denominator', NULL, count(*) FILTER (WHERE is_cancer), NULL, count(*), NULL
+        SELECT -1, 'denominator', NULL, count(*) FILTER (WHERE is_cancer), NULL, count(*), NULL,
+               NULL, NULL
         FROM base
         """,
         params,
@@ -452,6 +457,8 @@ def themes_report(
                 "keyword_hits": total["hits"] if total else 0,
                 "active_publications": total["active_n"] if total else 0,
                 "inter_program_pct": round(100 * total["inter"] / n, 1) if n else 0.0,
+                "median_rcr": total["median_rcr"] if total else None,
+                "pct_top_10": total["pct_top_10"] if total else None,
                 "members": len(active_rows),
                 "by_year": [
                     {"year": int(r["key"]), "publications": r["n"]}

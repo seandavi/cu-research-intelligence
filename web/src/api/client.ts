@@ -5,7 +5,6 @@ import type {
   ChatResponse,
   CollaborationTrendRow,
   CollaboratorRow,
-  FocusRow,
   GrantAgencyRow,
   GrantProgramRow,
   GrantSummary,
@@ -70,7 +69,6 @@ export const api = {
     get<MatrixCell[]>("/program-collaboration-matrix", { ...yr(r), current_only: currentOnly, focus }),
   programCombinations: (r?: YearRange, currentOnly = true) =>
     get<ProgramCombination[]>("/program-combinations", { ...yr(r), current_only: currentOnly }),
-  foci: (r?: YearRange) => get<FocusRow[]>("/foci", yr(r)),
   fociCombinations: (r?: YearRange) => get<ProgramCombination[]>("/foci-combinations", yr(r)),
   members: (r?: YearRange, focus?: string, minFoci?: number) =>
     get<MemberRow[]>("/members", { ...yr(r), focus, min_foci: minFoci }),

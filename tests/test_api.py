@@ -151,18 +151,6 @@ requires_foci = pytest.mark.skipif(
 
 
 @requires_foci
-def test_foci_lists_strategic_plan_foci(client: TestClient):
-    from cu_openalex.cancer_center.retreat import FOCUS, THEMES
-
-    rows = client.get("/api/foci").json()
-    plan = {r["name"]: r for r in rows if r["group"] == FOCUS}
-    assert set(plan) == {t["name"] for t in THEMES if t["group"] == FOCUS}
-    assert len(plan) == 5
-    assert all(r["publications"] > 0 for r in plan.values())
-    assert all({"inter_program_pct", "median_rcr", "pct_top_10"} <= set(r) for r in rows)
-
-
-@requires_foci
 def test_publications_focus_filter_narrows(client: TestClient):
     total = client.get("/api/publications?page_size=1").json()["total"]
     focused = client.get("/api/publications?focus=Immunotherapy&page_size=1").json()["total"]

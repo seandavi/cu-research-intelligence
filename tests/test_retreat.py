@@ -64,6 +64,8 @@ def test_themes_report_and_api():
     ct = themes[[t["name"] for t in themes].index("Clinical trial reports")]
     assert ct["publications"] > 0 and 0 <= ct["inter_program_pct"] <= 100
     assert ct["keyword_hits"] >= ct["publications"] >= ct["active_publications"]
+    assert ct["median_rcr"] is None or ct["median_rcr"] >= 0
+    assert ct["pct_top_10"] is None or 0 <= ct["pct_top_10"] <= 100
     top = ct["top_members"][0]
     assert top["match_confidence"] in {"high", "medium", "low", None}
     assert top["joined_year"] is None or top["joined_year"] <= report["window"]["max_year"]

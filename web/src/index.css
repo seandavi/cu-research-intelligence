@@ -139,7 +139,7 @@ table.data a:hover { text-decoration: underline; }
 .loading { color: var(--muted); padding: 2rem 0; }
 .error { color: #c53030; background: #fdeaea; padding: 0.6rem 0.8rem; border-radius: 8px; }
 
-/* Retreat */
+/* Foci table + retreat submissions */
 .clickable { cursor: pointer; }
 tr.sel td { background: #eef2f7; }
 .qform { display: grid; gap: 0.5rem; margin-bottom: 0.9rem; max-width: 720px; }
@@ -148,12 +148,9 @@ tr.sel td { background: #eef2f7; }
 .termlist { color: var(--muted); font-size: 0.78rem; }
 .cols2 { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; }
 .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; }
-.zero { color: #b45309; }
 .spark { display: inline-flex; align-items: flex-end; gap: 1px; height: 18px; }
 .spark i { display: block; width: 5px; background: var(--accent); opacity: 0.75; }
 .status { padding: 0.1rem 0.45rem; border-radius: 999px; font-size: 0.72rem; background: #eef2f7; }
-.cta { background: #eef4fb; border-color: #cfe0f3; }
-.cta ul { margin: 0.3rem 0 0; padding-left: 1.2rem; }
 .worklist { margin: 0.4rem 0 0; padding-left: 1.1rem; font-size: 0.85rem; line-height: 1.45; }
 td.group { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 0.6rem; }
 li.starred { font-weight: 600; }

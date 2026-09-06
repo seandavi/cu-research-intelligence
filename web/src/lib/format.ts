@@ -63,3 +63,6 @@ export const FOCUS_SHORT: Record<string, string> = {
   "N-of-1, patient-centric & investigator-initiated trials": "N-of-1 / IIT",
 };
 export const shortFocus = (f: string) => FOCUS_SHORT[f] ?? f;
+
+// Program name → initials ("Cancer Prevention and Control" → "CPaC").
+export const initials = (p: string | null) => (p ?? "").split(" ").map((w) => w[0]).join("");

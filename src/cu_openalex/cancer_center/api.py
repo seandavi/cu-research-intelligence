@@ -353,14 +353,6 @@ def experts(
 # --- Strategic foci (issue #38) ---------------------------------------------
 
 
-@app.get("/api/foci")
-def foci(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
-    """Per strategic focus / retreat theme: publications, inter-programmatic %,
-    median RCR, % top-10% citation percentile. ``group`` separates the Strategic
-    Plan foci from the clinical-trial themes."""
-    return focus.foci(min_year, max_year)
-
-
 @app.get("/api/foci-combinations")
 def foci_combinations(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
     """Publications per exact set of Strategic Plan foci (UpSet input)."""

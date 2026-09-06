@@ -165,17 +165,6 @@ export interface MemberRow {
   foci: string[];
 }
 
-// Strategic focus / retreat theme rollup (/api/foci); `group` separates the
-// Strategic Plan foci from the clinical-trial themes.
-export interface FocusRow {
-  name: string;
-  group: string;
-  publications: number;
-  inter_program_pct: number;
-  median_rcr: number | null;
-  pct_top_10: number | null;
-}
-
 export interface ChatResponse {
   answer: string;
   queries: string[];
@@ -313,6 +302,8 @@ export interface RetreatTheme {
   keyword_hits: number;
   active_publications: number;
   inter_program_pct: number;
+  median_rcr: number | null;
+  pct_top_10: number | null;
   members: number;
   by_year: { year: number; publications: number }[];
   by_program: { program: string; publications: number }[];
