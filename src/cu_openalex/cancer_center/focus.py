@@ -53,13 +53,14 @@ def build_work_focus(source: str | None = None) -> str:
 
 
 # --- Read surface (foci page, issue #38) -------------------------------------
-# Counts use the works' own flags (is_inter_program, rcr, is_top_10_pct) under the
+# Counts use the works' own flags (is_inter_program, rcr, nih_percentile) under the
 # retreat cohort rule (cancer-relevant, no meeting abstracts) — the same filter
 # ``focus=`` applies on the publication/program/network endpoints, so numbers agree.
 
 
 def foci(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
-    """Per focus/theme: publications, inter-programmatic %, median RCR, % top-10%."""
+    """Per focus/theme: publications, inter-programmatic %, median RCR, and the share
+    of iCite-scored works at NIH percentile >= 90 (top 10% for year and field)."""
     yc = q._year_clause(min_year, max_year, col="w.publication_year")
     return q.run_sql(
         f"""
@@ -67,7 +68,7 @@ def foci(min_year: int | None = None, max_year: int | None = None) -> list[dict]
                count(*) AS publications,
                round(100.0 * avg(w.is_inter_program::int), 1) AS inter_program_pct,
                round(median(w.rcr), 2) AS median_rcr,
-               round(100.0 * avg(w.is_top_10_pct::int), 1) AS pct_top_10
+               round(100.0 * avg((w.nih_percentile >= 90)::int), 1) AS pct_top_10
         FROM works w JOIN work_focus f USING (work_id)
         WHERE {yc} AND {q.cohort_clause()}
         GROUP BY f.theme_idx, 1, 2 ORDER BY f.theme_idx
