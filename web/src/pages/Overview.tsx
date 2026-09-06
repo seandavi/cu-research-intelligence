@@ -22,26 +22,30 @@ import {
 import { fmtInt, fmtNum, fmtPct } from "../lib/format";
 
 // One row per nav tab (issue #48). "Scope" is the population each tab counts; today all
-// three are member-scoped (ADR-0027's campus-wide cancer view is not built yet).
+// three are member-scoped (ADR-0027's campus-wide cancer view is not built yet). The Foci row
+// assumes the cancer-relevance labels are baked (denominator.cancer_filter); a bake without them
+// would make that row over-claim.
 const MEMBER_PUBS = "Peer-reviewed papers by roster members in the year window";
 const GUIDE = [
   { to: "/", tab: "Overview", answers: "Headline output, impact, and collaboration mix by year",
-    scope: `${MEMBER_PUBS}, whenever they joined`, caveat: "The latest year or two are provisional (indexing lag)" },
+    scope: `${MEMBER_PUBS}, whenever they joined the Center`, caveat: "The latest year or two are provisional (indexing lag)" },
   { to: "/publications", tab: "Publications", answers: "Find and filter individual papers",
-    scope: MEMBER_PUBS, caveat: "Relevance ranks title and abstract text only" },
+    scope: MEMBER_PUBS, caveat: "Includes members' non-cancer papers; search ranks title and abstract text only" },
   { to: "/programs", tab: "Program Collaboration", answers: "Intra- vs inter-programmatic co-authorship, by program",
     scope: `${MEMBER_PUBS}; a paper counts for every program its member authors belong to`,
     caveat: "Deprecated programs are hidden unless toggled on" },
   { to: "/foci", tab: "Strategic Foci", answers: "Output, program mix, and people per Strategic Plan focus",
-    scope: "Cancer-relevant member papers, counted only while the author was a member",
+    scope: "Cancer-relevant member papers; the focus table counts a paper only while its author was a member",
     caveat: "Keyword-matched: a lower bound, and overlaps partly reflect shared vocabulary" },
   { to: "/institutions", tab: "Inter-institutional", answers: "External and international co-authorship and top partner institutions",
-    scope: "Member papers with a co-author outside the CU Anschutz complex", caveat: "Relies on OpenAlex affiliation parsing" },
+    scope: "All member papers; one is inter-institutional when any co-author is outside the Anschutz complex (Anschutz, CU Denver, ColoradoSPH, Children's Colorado)",
+    caveat: "CU Boulder and other Colorado campuses count as external; relies on OpenAlex affiliation parsing" },
   { to: "/funding", tab: "NIH Funding", answers: "NIH grants, award totals, and institutes by program", needsGrants: true,
     scope: "NIH RePORTER projects where a member is a named PI at any institution",
-    caveat: "Matched by exact PI name (no ORCID); non-NIH funding is not included" },
+    caveat: "Exact PI-name match (no ORCID) can mis-credit common names; NIH only; the year range is fiscal years" },
   { to: "/networks", tab: "Networks", answers: "Who co-authors with whom; bridge investigators",
-    scope: "Member-to-member ties with at least N shared papers", caveat: "External co-authors are not in the graph" },
+    scope: "Member-to-member ties with at least N shared peer-reviewed papers in the window (N defaults to 3)",
+    caveat: "External co-authors are not in the graph; members with no tie at the threshold are not shown" },
   { to: "/members", tab: "Members", answers: "Per-member output, impact, and foci",
     scope: "Members resolved to an OpenAlex author", caveat: "Name-only matches (no ORCID) may include a namesake's papers" },
   { to: "/ask", tab: "Ask", answers: "Plain-English questions over the same tables",
@@ -81,7 +85,8 @@ export function Overview({ range }: { range: YearRange }) {
         <summary>New here? What each tab shows</summary>
         <p className="hint">
           Every tab counts the work of <strong>Cancer Center members</strong> on the roster —
-          not all cancer research at CU Anschutz. A campus-wide cancer view (any CU author, with
+          not all cancer research at CU Anschutz. A member's papers count whether or not they are
+          about cancer; only Strategic Foci applies the cancer-relevance filter. A campus-wide cancer view (any CU author, with
           the member share) is planned but not yet on the site.
         </p>
         <table className="data compact">
