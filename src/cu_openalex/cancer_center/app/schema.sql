@@ -44,36 +44,3 @@ CREATE TABLE IF NOT EXISTS pub_correction (
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     PRIMARY KEY (member_id, work_id)
 );
-
--- Scientific-retreat submissions: abstracts, panel questions, registrations.
--- The landing table for the external form exports (CSV import in app/retreat.py)
--- plus in-app panel questions. Resolved to a member by email through the spine
--- at insert time; ``extra`` keeps any other form columns verbatim.
-CREATE TABLE IF NOT EXISTS retreat_entry (
-    id         BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    kind       TEXT NOT NULL CHECK (kind IN ('abstract', 'question', 'registration')),
-    source_id  TEXT,                        -- "<form label>:<response id>" (ids restart per form)
-    name       TEXT NOT NULL,
-    email      TEXT,
-    member_id  BIGINT,                      -- nullable: lab members, guests, unmatched emails
-    program    TEXT,
-    role       TEXT,                        -- member / lab member / trainee / guest (from the form)
-    title      TEXT,
-    body       TEXT,                        -- abstract text / question text
-    category   TEXT,                        -- abstract: preferred format; question: topic area
-    decision   TEXT,                        -- abstract triage: oral / discussion / poster / declined
-    decided_by BIGINT REFERENCES app_user (id),
-    decided_at TIMESTAMPTZ,
-    extra      JSONB NOT NULL DEFAULT '{}',
-    import_file TEXT,                       -- provenance: the export that created/updated the row
-    imported_at TIMESTAMPTZ,
-    created_by BIGINT REFERENCES app_user (id),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-    -- Re-importing a form export updates rows instead of duplicating them: the
-    -- form's response id when present, else a content hash.
-    dedup_key  TEXT GENERATED ALWAYS AS (
-        coalesce(source_id, md5(lower(coalesce(email, '')) || coalesce(title, '') || coalesce(body, '')))
-    ) STORED,
-    UNIQUE (kind, dedup_key)
-);

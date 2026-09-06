@@ -99,9 +99,6 @@ export const useMe = () =>
 export const useRetreatThemes = (r?: YearRange) =>
   useQuery({ queryKey: key("retreat_themes", r), queryFn: () => api.retreatThemes(r), enabled: !!r });
 
-export const useRetreatEntries = (enabled: boolean) =>
-  useQuery({ queryKey: ["retreat_entries"], queryFn: api.retreatEntries, retry: false, enabled });
-
 export const useRetreatThemeWorks = (theme: number, memberId: number | undefined, r?: YearRange) =>
   useQuery({
     queryKey: key("retreat_works", r, `${theme}:${memberId ?? ""}`),

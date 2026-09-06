@@ -9,21 +9,20 @@ from __future__ import annotations
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel, Field
 
-from . import auth, identity, profiles, retreat
+from . import auth, identity, profiles
 from . import roles as R
 from .config import get_app_config
 from .db import get_pool
 
 router = APIRouter(prefix="/api")
 
-# Dependencies: require a logged-in member / any login / a retreat organizer.
+# Dependencies: require a logged-in member / any login.
 require_member = auth.require_role(R.MEMBER)
 require_login = auth.require_role()
-require_organizer = auth.require_role(R.LEADERSHIP, R.ADMIN)
 
 
 class LinkItem(BaseModel):
@@ -41,17 +40,6 @@ class ProfileUpdate(BaseModel):
 class CorrectionRequest(BaseModel):
     work_id: str = Field(max_length=100)
     action: Literal["claim", "disclaim"]
-
-
-class RetreatEntryIn(BaseModel):
-    kind: Literal["abstract", "question", "registration"] = "question"
-    title: str | None = Field(default=None, max_length=500)
-    body: str | None = Field(default=None, max_length=10000)
-    category: str | None = Field(default=None, max_length=100)
-
-
-class RetreatDecision(BaseModel):
-    decision: str | None = Field(default=None, max_length=50)
 
 
 @router.get("/auth/login")
@@ -150,57 +138,3 @@ async def add_correction(body: CorrectionRequest, user: dict = Depends(require_m
 async def get_corrections(member_id: int) -> list[dict]:
     """A member's publication claim/disclaim corrections."""
     return await profiles.list_corrections(get_pool(), member_id)
-
-
-# --- Scientific retreat submissions (app/retreat.py) --------------------------
-
-
-def _is_organizer(user: dict) -> bool:
-    return bool({R.LEADERSHIP, R.ADMIN} & set(user["roles"]))
-
-
-@router.get("/retreat/entries")
-async def retreat_entries(
-    kind: str | None = Query(None, pattern="^(abstract|question|registration)$"),
-    user: dict = Depends(require_login),
-) -> dict:
-    """Submissions visible to the caller: everything for organizers
-    (leadership/admin); otherwise the caller's own rows + anonymized questions."""
-    organizer = _is_organizer(user)
-    return {
-        "organizer": organizer,
-        "entries": await retreat.list_entries(get_pool(), kind, viewer=user, organizer=organizer),
-    }
-
-
-@router.post("/retreat/entries")
-async def retreat_submit(body: RetreatEntryIn, user: dict = Depends(require_login)) -> dict:
-    """Submit an entry as the logged-in user (e.g. a panel question); identity comes
-    from the session, never the body. ``inserted`` is False if an identical entry existed."""
-    new_id, inserted = await retreat.add_entry(
-        get_pool(),
-        kind=body.kind,
-        name=user["name"] or user["email"],
-        email=user["email"],
-        title=body.title,
-        body=body.body,
-        category=body.category,
-        created_by=user["user_id"],
-    )
-    return {"id": new_id, "inserted": inserted}
-
-
-@router.post("/retreat/entries/{entry_id}/decision")
-async def retreat_decide(
-    entry_id: int, body: RetreatDecision, user: dict = Depends(require_organizer)
-) -> dict:
-    """Organizer triage of an abstract (oral / discussion / poster / declined)."""
-    if not await retreat.set_decision(
-        get_pool(),
-        entry_id,
-        decision=body.decision,
-        category=body.category,
-        decided_by=user["user_id"],
-    ):
-        raise HTTPException(status_code=404, detail="entry not found")
-    return {"ok": True}
