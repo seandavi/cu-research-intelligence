@@ -2,7 +2,7 @@
 
 The works snapshot lives at ``s3://openalex/data/works/updated_date=*/part_*.gz``
 and is described by a ``manifest`` listing every part file. We read it anonymously
-over HTTPS (``https://openalex.s3.amazonaws.com/...``), so no S3 credentials are
+over HTTPS (``https://openalex.s3.amazonaws.com/data/jsonl/...``), so no S3 credentials are
 needed (ADR-0008).
 
 This module is pure + testable: ``fetch_manifest`` does one HTTP GET; everything
@@ -84,13 +84,16 @@ def s3_to_https(s3_url: str, *, bucket: str) -> str:
 
 def manifest_url(entity: str, *, settings: Settings | None = None) -> str:
     s = settings or get_settings()
-    return f"https://{s.snapshot_bucket}.s3.amazonaws.com/data/{entity}/manifest"
+    # Layout since the 2026 restructure: data/jsonl/<entity>/manifest.json (a
+    # parquet mirror lives at data/parquet/; the old data/<entity>/manifest is
+    # frozen under legacy-data/).
+    return f"https://{s.snapshot_bucket}.s3.amazonaws.com/data/jsonl/{entity}/manifest.json"
 
 
 def parse_manifest(manifest: dict, *, bucket: str) -> list[ManifestEntry]:
     """Parse a snapshot manifest JSON into sorted :class:`ManifestEntry` items."""
     entries: list[ManifestEntry] = []
-    for item in manifest.get("entries", []):
+    for item in manifest.get("files", []):
         url = item["url"]
         match = _UPDATED_DATE_RE.search(url)
         if not match:

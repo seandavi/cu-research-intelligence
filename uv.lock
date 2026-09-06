@@ -369,15 +369,14 @@ wheels = [
 
 [[package]]
 name = "cdsci-lake"
-version = "0.1.0"
-source = { git = "https://github.com/seandavi/cdsci-lake?branch=main#a923418cf3fb5777aa966d0abe7c24bd813c1bf6" }
+version = "0.2.1"
+source = { git = "https://github.com/seandavi/cdsci-lake?branch=main#f039f56a665798281087d1a3a0510ab87d1aecfe" }
 dependencies = [
     { name = "duckdb" },
     { name = "httpx" },
     { name = "loguru" },
     { name = "pydantic-settings" },
     { name = "tenacity" },
-    { name = "typer" },
 ]
 
 [[package]]

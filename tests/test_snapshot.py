@@ -17,7 +17,7 @@ from cu_openalex.openalex.snapshot import (
 BUCKET = "openalex"
 
 MANIFEST = {
-    "entries": [
+    "files": [
         {
             "url": "s3://openalex/data/works/updated_date=2026-01-10/part_0000.gz",
             "meta": {"record_count": 5},

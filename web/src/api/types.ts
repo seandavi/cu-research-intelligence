@@ -9,6 +9,8 @@ export interface Meta {
   current_programs: string[];
   all_programs: string[];
   grants_available: boolean;
+  /** Freshness stamps baked into the serving DB (see cancer_center.bake). */
+  data_freshness: Record<string, string>;
 }
 
 export interface MemberGrant {

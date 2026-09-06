@@ -1,0 +1,13 @@
+[Unit]
+Description=Monthly research-intelligence data refresh (a few days after the OpenAlex snapshot)
+
+[Timer]
+# OpenAlex publishes its snapshot around the turn of the month; the 5th gives it
+# (and the lake's own icite load on the 1st) time to land. Same slot the README
+# always documented (cron "0 6 5 * *").
+OnCalendar=*-*-05 06:00:00
+RandomizedDelaySec=1800
+Persistent=true
+
+[Install]
+WantedBy=timers.target

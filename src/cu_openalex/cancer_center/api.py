@@ -120,6 +120,7 @@ def meta() -> dict:
         "current_programs": list(CURRENT_PROGRAMS),
         "all_programs": q.all_programs(),
         "grants_available": q.grants_available(),
+        "data_freshness": q.data_freshness(),
     }
 
 

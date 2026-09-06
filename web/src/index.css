@@ -28,6 +28,8 @@ a { color: inherit; }
 }
 .sidebar nav a:hover { background: #f0f2f5; }
 .sidebar nav a.active { background: #e8eef6; color: var(--accent); font-weight: 600; }
+.sidebar-foot { margin-top: 1.6rem; padding: 0 0.7rem; color: var(--muted); font-size: 0.75rem; line-height: 1.5; }
+.sidebar-foot span { color: var(--ink); }
 
 .content { padding: 1.4rem 2rem; max-width: 1200px; }
 .lede { color: var(--muted); max-width: 760px; line-height: 1.5; }
