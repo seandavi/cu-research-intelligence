@@ -1,4 +1,5 @@
 import { useMemo, useState, type ReactNode } from "react";
+import { track, trackDebounced } from "../lib/analytics";
 
 export function KpiCard({
   label,
@@ -47,6 +48,10 @@ export function YearFilter({
   bounds: { min: number; max: number };
   onChange: (v: { minYear: number; maxYear: number }) => void;
 }) {
+  const change = (v: { minYear: number; maxYear: number }) => {
+    onChange(v);
+    trackDebounced("change_year_range", { min_year: v.minYear, max_year: v.maxYear });
+  };
   return (
     <div className="yearfilter">
       <label>Years</label>
@@ -55,7 +60,7 @@ export function YearFilter({
         min={bounds.min}
         max={value.maxYear}
         value={value.minYear}
-        onChange={(e) => onChange({ ...value, minYear: Number(e.target.value) })}
+        onChange={(e) => change({ ...value, minYear: Number(e.target.value) })}
       />
       <span>–</span>
       <input
@@ -63,7 +68,7 @@ export function YearFilter({
         min={value.minYear}
         max={bounds.max}
         value={value.maxYear}
-        onChange={(e) => onChange({ ...value, maxYear: Number(e.target.value) })}
+        onChange={(e) => change({ ...value, maxYear: Number(e.target.value) })}
       />
     </div>
   );
@@ -136,13 +141,20 @@ export function Th({
   children: ReactNode;
 }) {
   const dir = ctl.sort?.key === k ? ctl.sort.dir : 0;
+  const first = num ? -1 : 1;
+  const onClick = () => {
+    ctl.toggle(k, first);
+    // ponytail: mirrors useSort's cycle; server-sorted tables flip instead of reaching "none".
+    const next = dir === 0 ? first : dir === first ? -first : 0;
+    track("sort_table", { page: window.location.pathname, column: k, direction: next === 0 ? "none" : next === 1 ? "asc" : "desc" });
+  };
   return (
     <th
       className={num ? "num" : undefined}
       title={title}
       aria-sort={dir === 1 ? "ascending" : dir === -1 ? "descending" : "none"}
     >
-      <button className="sort" onClick={() => ctl.toggle(k, num ? -1 : 1)}>
+      <button className="sort" onClick={onClick}>
         {children}
         <span className="sort-arrow" aria-hidden>{dir === 1 ? "▲" : dir === -1 ? "▼" : "⇅"}</span>
       </button>

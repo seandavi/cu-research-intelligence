@@ -93,7 +93,10 @@ export function Publications({ range }: { range: YearRange }) {
           />
           <select
             value={filters.collaboration_class ?? ""}
-            onChange={(e) => patch({ collaboration_class: e.target.value || undefined })}
+            onChange={(e) => {
+              patch({ collaboration_class: e.target.value || undefined });
+              track("filter_collaboration", { value: e.target.value || "any" });
+            }}
           >
             <option value="">Any collaboration</option>
             <option value="solo">Solo</option>
@@ -211,7 +214,7 @@ export function PublicationRowView({ r }: { r: PublicationRow }) {
     <tr>
       <td>
         {link ? (
-          <a href={link} target="_blank" rel="noreferrer">
+          <a href={link} target="_blank" rel="noreferrer" onClick={() => track("outbound_link", { kind: r.doi ? "doi" : "pubmed", work_id: r.work_id })}>
             {r.title ?? "(untitled)"}
           </a>
         ) : (

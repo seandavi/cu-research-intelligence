@@ -39,3 +39,11 @@ export function trackPageView(path: string, title?: string): void {
 export function track(name: string, params: Record<string, unknown> = {}): void {
   window.gtag?.("event", name, params);
 }
+
+// For controls that fire per keystroke or per pixel (year inputs, range slider):
+// send one event per settled value, keyed by event name.
+const timers: Record<string, number> = {};
+export function trackDebounced(name: string, params: Record<string, unknown> = {}, ms = 800): void {
+  window.clearTimeout(timers[name]);
+  timers[name] = window.setTimeout(() => track(name, params), ms);
+}

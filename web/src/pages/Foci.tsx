@@ -17,6 +17,7 @@ import {
   useRetreatThemeWorks,
   useRetreatThemes,
 } from "../hooks/useApi";
+import { track } from "../lib/analytics";
 import { downloadCsv, fmtInt, fmtNum, fmtPct, initials, programColors, shortFocus, shorten } from "../lib/format";
 import { PublicationRowView } from "./Publications";
 
@@ -32,6 +33,10 @@ export function Foci({ range }: { range: YearRange }) {
   const combos = useFociCombinations(range);
   const myMemberId = me.data?.member_id ?? null;
   const [sel, setSel] = useState(0);
+  const pick = (i: number) => {
+    setSel(i);
+    track("select_focus", { focus: report.data?.themes[i]?.name });
+  };
   const [showHow, setShowHow] = useState(false);
   const [member, setMember] = useState<number | undefined>();
   const [showMine, setShowMine] = useState(false);
@@ -142,7 +147,7 @@ export function Foci({ range }: { range: YearRange }) {
                     <td colSpan={8 + programs.length} className="muted group">{th.group}</td>
                   </tr>
                 )}
-                <tr className={`clickable ${i === sel ? "sel" : ""} ${th.footnote ? "muted" : ""}`} onClick={() => setSel(i)}>
+                <tr className={`clickable ${i === sel ? "sel" : ""} ${th.footnote ? "muted" : ""}`} onClick={() => pick(i)}>
                   <td>
                     {th.name}
                     {th.footnote && <span className="termlist"> (topic signal only)</span>}
@@ -203,7 +208,7 @@ export function Foci({ range }: { range: YearRange }) {
           <div className="tabs" role="tablist" aria-label="Strategic Plan focus">
             {themes.map((t, i) =>
               t.group.startsWith("Strategic Plan") ? (
-                <button key={t.name} role="tab" aria-selected={i === sel} className={`tab ${i === sel ? "on" : ""}`} onClick={() => setSel(i)}>
+                <button key={t.name} role="tab" aria-selected={i === sel} className={`tab ${i === sel ? "on" : ""}`} onClick={() => pick(i)}>
                   {shortFocus(t.name)}
                 </button>
               ) : null,
@@ -213,7 +218,7 @@ export function Foci({ range }: { range: YearRange }) {
             <span className="chips-label">Clinical-trial themes:</span>
             {themes.map((t, i) =>
               t.group.startsWith("Strategic Plan") ? null : (
-                <button key={t.name} role="tab" aria-selected={i === sel} className={`tab ${i === sel ? "on" : ""}`} onClick={() => setSel(i)}>
+                <button key={t.name} role="tab" aria-selected={i === sel} className={`tab ${i === sel ? "on" : ""}`} onClick={() => pick(i)}>
                   {shortFocus(t.name)}
                 </button>
               ),
@@ -302,7 +307,7 @@ export function Foci({ range }: { range: YearRange }) {
                     <tr key={x.topic}>
                       <td>
                         {x.topic_id ? (
-                          <a href={`https://openalex.org/${x.topic_id}`} target="_blank" rel="noreferrer" title="Open this topic on OpenAlex">
+                          <a href={`https://openalex.org/${x.topic_id}`} target="_blank" rel="noreferrer" title="Open this topic on OpenAlex" onClick={() => track("outbound_link", { kind: "openalex_topic" })}>
                             {x.topic}
                           </a>
                         ) : (
