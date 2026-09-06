@@ -115,7 +115,7 @@ export function Foci({ range }: { range: YearRange }) {
             <KpiCard label="Publications" value={fmtInt(selected.publications)} hint="Cancer-relevant, peer-reviewed, in window" />
             <KpiCard label="Inter-programmatic" value={fmtPct(selected.inter_program_pct)} hint="Members from ≥2 programs" />
             <KpiCard label="Median RCR" value={fmtNum(selected.median_rcr)} hint="NIH iCite Relative Citation Ratio (1.0 = median NIH paper)" />
-            <KpiCard label="Top 10% cited" value={fmtPct(selected.pct_top_10)} hint="Share in the top 10% of OpenAlex citation percentile for year and field" />
+            <KpiCard label="Top 10% cited" value={fmtPct(selected.pct_top_10)} hint="Share of iCite-scored papers at NIH percentile ≥ 90 (top 10% for year and field)" />
           </div>
 
           <Card title="Program × program co-authorship in this focus">
