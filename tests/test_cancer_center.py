@@ -47,15 +47,27 @@ def test_parse_pis_from_lake_strings():
         "10406548;1934274 (contact)",
     )
     assert pis == [
-        {"first_name": "BROCK", "last_name": "CHRISTENSEN",
-         "is_contact_pi": False, "profile_id": "10406548"},
-        {"first_name": "KARL", "last_name": "KELSEY",
-         "is_contact_pi": True, "profile_id": "1934274"},
+        {
+            "first_name": "BROCK",
+            "last_name": "CHRISTENSEN",
+            "is_contact_pi": False,
+            "profile_id": "10406548",
+        },
+        {
+            "first_name": "KARL",
+            "last_name": "KELSEY",
+            "is_contact_pi": True,
+            "profile_id": "1934274",
+        },
     ]
     # Single contact PI.
     assert _parse_pis("WOZNIAK, DANIEL J (contact)", "1876395 (contact)") == [
-        {"first_name": "DANIEL", "last_name": "WOZNIAK",
-         "is_contact_pi": True, "profile_id": "1876395"}
+        {
+            "first_name": "DANIEL",
+            "last_name": "WOZNIAK",
+            "is_contact_pi": True,
+            "profile_id": "1876395",
+        }
     ]
     # Missing data → empty list (no crash).
     assert _parse_pis(None, None) == []
@@ -142,3 +154,32 @@ def test_run_safe_sql_rejects_mutations(sql):
 def test_run_safe_sql_allows_select():
     df = run_safe_sql("SELECT 1 AS n")
     assert df["n"][0] == 1
+
+
+def test_latest_raw_sql_keeps_one_capture_per_work(tmp_path):
+    """A work re-captured in a newer snapshot partition must not be merged with its
+    older copy (that doubled every abstract word on the site)."""
+    import duckdb
+    import polars as pl
+
+    from cu_openalex.cancer_center.build import _latest_raw_sql
+
+    pl.DataFrame(
+        {
+            "work_id": ["W1", "W1", "W2"],
+            "updated_date": ["2026-02-02", "2026-06-26", "2026-02-02"],
+            "raw_json": [
+                '{"abstract_inverted_index": {"old": [0]}}',
+                '{"abstract_inverted_index": {"new": [0]}}',
+                '{"abstract_inverted_index": {"only": [0]}}',
+            ],
+        }
+    ).write_parquet(tmp_path / "raw.parquet")
+    con = duckdb.connect()
+    con.execute("CREATE TABLE cc_workids AS SELECT 'W1' AS work_id UNION ALL SELECT 'W2'")
+    latest = _latest_raw_sql(str(tmp_path / "raw.parquet"))
+    rows = con.execute(f"SELECT work_id, raw_json FROM ({latest}) ORDER BY 1").fetchall()
+    assert rows == [
+        ("W1", '{"abstract_inverted_index": {"new": [0]}}'),
+        ("W2", '{"abstract_inverted_index": {"only": [0]}}'),
+    ]

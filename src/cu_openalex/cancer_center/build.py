@@ -34,6 +34,18 @@ from .resolve import build_crosswalk
 
 _WORKS_GLOB = "data/openalex/works/**/*.parquet"
 _RAW_WORKS_GLOB = "data/openalex/raw/works/**/*.parquet"
+
+
+def _latest_raw_sql(raw_glob: str, ids_table: str = "cc_workids") -> str:
+    """Latest raw capture per work in ``ids_table`` (raw keeps one row per snapshot
+    partition a work was captured in; the newest ``updated_date`` wins)."""
+    return f"""
+        SELECT r.work_id, r.raw_json
+        FROM '{raw_glob}' r JOIN {ids_table} USING (work_id)
+        QUALIFY row_number() OVER (PARTITION BY r.work_id ORDER BY r.updated_date DESC) = 1
+    """
+
+
 _AUTHORS_GLOB = "data/openalex/authors/current/authors.parquet"
 _INSTITUTIONS_GLOB = "data/openalex/dimensions/institutions/*.parquet"
 
@@ -216,12 +228,17 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
 
         # iCite crosswalks from cdsci-lake, keyed by the cohort works above.
         _register_enrichment(con)
+        # The raw layer keeps every snapshot capture of a work (one row per
+        # updated_date partition it appeared in); read each cohort work's latest
+        # capture once, like works_curate_sql does, so per-work lookups below never
+        # merge two copies (that doubled/interleaved abstract words).
+        con.execute(f"CREATE TABLE raw_cc AS {_latest_raw_sql(_RAW_WORKS_GLOB)}")
         con.execute(
-            f"""
+            """
             CREATE TABLE issue_lookup AS
             SELECT work_id,
                    any_value(json_extract_string(r.raw_json, '$.biblio.issue')) AS issue
-            FROM '{_RAW_WORKS_GLOB}' r JOIN cc_workids c USING (work_id)
+            FROM raw_cc r
             GROUP BY work_id
             """
         )
@@ -229,14 +246,14 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
         # ({word: [positions]}) for full-text search (~64% of works have one).
         con.execute("INSTALL json; LOAD json;")
         con.execute(
-            f"""
+            """
             CREATE TABLE abstract_lookup AS
             WITH entries AS (
                 SELECT r.work_id,
                        UNNEST(map_entries(CAST(
                            json_extract(r.raw_json, '$.abstract_inverted_index')
                            AS MAP(VARCHAR, INTEGER[])))) AS ent
-                FROM '{_RAW_WORKS_GLOB}' r JOIN cc_workids c USING (work_id)
+                FROM raw_cc r
                 WHERE json_extract(r.raw_json, '$.abstract_inverted_index') IS NOT NULL
             ),
             positions AS (
