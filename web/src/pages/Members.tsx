@@ -2,13 +2,16 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import type { YearRange } from "../api/types";
 import { Card, Caveat, ErrorNote, Loading } from "../components/ui";
-import { useMembers } from "../hooks/useApi";
-import { downloadCsv, fmtInt, fmtNum } from "../lib/format";
+import { useFoci, useMembers } from "../hooks/useApi";
+import { downloadCsv, fmtInt, fmtNum, shortFocus } from "../lib/format";
 
 export function Members({ range }: { range: YearRange }) {
-  const members = useMembers(range);
   const [search, setSearch] = useState("");
   const [program, setProgram] = useState("All");
+  const [focus, setFocus] = useState("");
+  const [multiFoci, setMultiFoci] = useState(false);
+  const members = useMembers(range, focus || undefined, multiFoci ? 2 : undefined);
+  const foci = useFoci(range);
 
   const rows = members.data ?? [];
   const programs = useMemo(
@@ -39,6 +42,18 @@ export function Members({ range }: { range: YearRange }) {
             <option key={p}>{p}</option>
           ))}
         </select>
+        <select value={focus} onChange={(e) => setFocus(e.target.value)}>
+          <option value="">Any focus</option>
+          {(foci.data ?? []).map((f) => (
+            <option key={f.name} value={f.name}>
+              {f.name}
+            </option>
+          ))}
+        </select>
+        <label className="chk">
+          <input type="checkbox" checked={multiFoci} onChange={(e) => setMultiFoci(e.target.checked)} />
+          Works in ≥2 foci
+        </label>
         <span className="muted">{filtered.length} members</span>
         <button onClick={() => downloadCsv(filtered, "uccc_member_directory.csv")}>⬇ CSV</button>
       </div>
@@ -52,6 +67,7 @@ export function Members({ range }: { range: YearRange }) {
               <th>Rank</th>
               <th>Status</th>
               <th>Match</th>
+              <th>Foci</th>
               <th className="num">Publications</th>
               <th className="num">Citations</th>
               <th className="num">Mean FWCI</th>
@@ -68,6 +84,13 @@ export function Members({ range }: { range: YearRange }) {
                 <td>{r.status}</td>
                 <td>
                   <span className={`badge ${r.match_confidence ?? ""}`}>{r.match_confidence ?? "—"}</span>
+                </td>
+                <td>
+                  {r.foci.map((f) => (
+                    <span key={f} className="pchip" title={f}>
+                      {shortFocus(f)}
+                    </span>
+                  ))}
                 </td>
                 <td className="num">{fmtInt(r.publications)}</td>
                 <td className="num">{fmtInt(r.citations)}</td>

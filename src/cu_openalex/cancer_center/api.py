@@ -25,7 +25,7 @@ from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
-from . import chat, networks, retreat
+from . import chat, focus, networks, retreat
 from . import queries as q
 from .programs import CURRENT_PROGRAMS
 
@@ -161,6 +161,7 @@ def publications(
     author: str | None = None,
     min_citations: int | None = Query(None, ge=0),
     min_rcr: float | None = Query(None, ge=0),
+    focus: str | None = None,
     sort: str = Query("citations", pattern="^(relevance|citations|rcr|fwci|year|title)$"),
     descending: bool = True,
     page: int = Query(1, ge=1),
@@ -180,6 +181,7 @@ def publications(
         author=author,
         min_citations=min_citations,
         min_rcr=min_rcr,
+        focus=focus,
         sort=sort,
         descending=descending,
         page=page,
@@ -211,16 +213,24 @@ def collaboration_trend(min_year: int | None = None, max_year: int | None = None
 
 @app.get("/api/program-summary")
 def program_summary(
-    min_year: int | None = None, max_year: int | None = None, current_only: bool = True
+    min_year: int | None = None,
+    max_year: int | None = None,
+    current_only: bool = True,
+    focus: str | None = None,
 ) -> list[dict]:
-    return _records(q.program_summary(min_year, max_year, current_only=current_only))
+    return _records(q.program_summary(min_year, max_year, current_only=current_only, focus=focus))
 
 
 @app.get("/api/program-collaboration-matrix")
 def program_collaboration_matrix(
-    min_year: int | None = None, max_year: int | None = None, current_only: bool = True
+    min_year: int | None = None,
+    max_year: int | None = None,
+    current_only: bool = True,
+    focus: str | None = None,
 ) -> list[dict]:
-    return _records(q.program_collaboration_matrix(min_year, max_year, current_only=current_only))
+    return _records(
+        q.program_collaboration_matrix(min_year, max_year, current_only=current_only, focus=focus)
+    )
 
 
 @app.get("/api/program-combinations")
@@ -242,8 +252,15 @@ def top_topics(
 
 
 @app.get("/api/members")
-def members(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
-    return _records(q.member_directory(min_year, max_year))
+def members(
+    min_year: int | None = None,
+    max_year: int | None = None,
+    focus: str | None = None,
+    min_foci: int | None = Query(None, ge=1),
+) -> list[dict]:
+    """Member directory; ``focus`` keeps members with ≥1 work in that focus,
+    ``min_foci`` those whose works span ≥N Strategic Plan foci."""
+    return _records(q.member_directory(min_year, max_year, focus=focus, min_foci=min_foci))
 
 
 @app.get("/api/top-collaborators")
@@ -277,9 +294,12 @@ def network(
     max_year: int | None = None,
     min_shared: int = Query(2, ge=1, le=20),
     program: str | None = None,
+    focus: str | None = None,
 ) -> dict:
     """Member co-authorship graph (nodes + edges) with degree / betweenness."""
-    return networks.member_network_data(min_year, max_year, min_shared=min_shared, program=program)
+    return networks.member_network_data(
+        min_year, max_year, min_shared=min_shared, program=program, focus=focus
+    )
 
 
 # --- Membership spine (ADR-0025) --------------------------------------------
@@ -328,6 +348,23 @@ def experts(
     to that member (shared papers/grants, existing_collaborator) rather than
     excluding — the base tool for the collaborator agent."""
     return q.find_experts(q_, program=program, relative_to=relative_to, limit=limit)
+
+
+# --- Strategic foci (issue #38) ---------------------------------------------
+
+
+@app.get("/api/foci")
+def foci(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
+    """Per strategic focus / retreat theme: publications, inter-programmatic %,
+    median RCR, % top-10% citation percentile. ``group`` separates the Strategic
+    Plan foci from the clinical-trial themes."""
+    return focus.foci(min_year, max_year)
+
+
+@app.get("/api/foci-combinations")
+def foci_combinations(min_year: int | None = None, max_year: int | None = None) -> list[dict]:
+    """Publications per exact set of Strategic Plan foci (UpSet input)."""
+    return focus.foci_combinations(min_year, max_year)
 
 
 # --- Scientific retreat: themes over member output --------------------------

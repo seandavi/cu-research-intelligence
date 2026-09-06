@@ -78,6 +78,7 @@ export interface PublicationFilters {
   author?: string;
   min_citations?: number;
   min_rcr?: number;
+  focus?: string;
   sort?: string;
   descending?: boolean;
   page?: number;
@@ -161,6 +162,18 @@ export interface MemberRow {
   publications: number;
   citations: number | null;
   mean_fwci: number | null;
+  foci: string[];
+}
+
+// Strategic focus / retreat theme rollup (/api/foci); `group` separates the
+// Strategic Plan foci from the clinical-trial themes.
+export interface FocusRow {
+  name: string;
+  group: string;
+  publications: number;
+  inter_program_pct: number;
+  median_rcr: number | null;
+  pct_top_10: number | null;
 }
 
 export interface ChatResponse {

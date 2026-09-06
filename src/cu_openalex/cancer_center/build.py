@@ -388,13 +388,17 @@ def main() -> None:
     paths = build_cancer_center_tables(min_confidence=args.min_confidence)
     for name, path in paths.items():
         print(f"  {name:14} -> {path}")
-    if not args.no_bake:
-        # Cancer-relevance labels (ADR-0027 stage 1) are a bake input: score first so
-        # serving.duckdb always carries pub_classification for the retreat lens.
-        from .bake import bake_serving_db
-        from .scoring import build_cancer_relevance
+    # Derived marts the serving DB always carries: cancer-relevance labels (ADR-0027
+    # stage 1) and the strategic-focus bridge (#38). Built even with --no-bake so a
+    # later standalone bake picks them up.
+    from .focus import build_work_focus
+    from .scoring import build_cancer_relevance
 
-        print(f"  {'pub_classification':14} -> {build_cancer_relevance()}")
+    print(f"  {'pub_classification':14} -> {build_cancer_relevance()['path']}")
+    print(f"  {'work_focus':14} -> {build_work_focus()}")
+    if not args.no_bake:
+        from .bake import bake_serving_db
+
         print(f"  {'serving.duckdb':14} -> {bake_serving_db()}")
 
 
