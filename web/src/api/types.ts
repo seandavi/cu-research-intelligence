@@ -318,7 +318,7 @@ export interface RetreatTheme {
     joined_year: number | null;
     early_career: boolean;
   }[];
-  top_topics: { topic: string; publications: number }[];
+  top_topics: { topic: string; topic_id: string | null; publications: number }[];
 }
 
 export interface RetreatReport {

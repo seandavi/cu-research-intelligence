@@ -295,7 +295,15 @@ export function Foci({ range }: { range: YearRange }) {
                 <tbody>
                   {cur.top_topics.map((x) => (
                     <tr key={x.topic}>
-                      <td>{x.topic}</td>
+                      <td>
+                        {x.topic_id ? (
+                          <a href={`https://openalex.org/${x.topic_id}`} target="_blank" rel="noreferrer" title="Open this topic on OpenAlex">
+                            {x.topic}
+                          </a>
+                        ) : (
+                          x.topic
+                        )}
+                      </td>
                       <td className="num">{fmtInt(x.publications)}</td>
                     </tr>
                   ))}
