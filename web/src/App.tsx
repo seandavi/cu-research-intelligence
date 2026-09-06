@@ -1,5 +1,5 @@
 import { lazy, useEffect, useState } from "react";
-import { Route, Routes, useLocation } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import { YearFilter } from "./components/ui";
 import { useMeta } from "./hooks/useApi";
@@ -24,7 +24,6 @@ const MemberProfile = lazy(() =>
   import("./pages/MemberProfile").then((m) => ({ default: m.MemberProfile })),
 );
 const Ask = lazy(() => import("./pages/Ask").then((m) => ({ default: m.Ask })));
-const Retreat = lazy(() => import("./pages/Retreat").then((m) => ({ default: m.Retreat })));
 
 export function App() {
   const meta = useMeta();
@@ -56,7 +55,7 @@ export function App() {
         <Route path="members" element={<WithFilter range={range} setRange={setRange}>{(r) => <Members range={r} />}</WithFilter>} />
         <Route path="members/:id" element={<WithFilter range={range} setRange={setRange}>{(r) => <MemberProfile range={r} />}</WithFilter>} />
         <Route path="ask" element={<Ask />} />
-        <Route path="retreat" element={<Retreat />} />
+        <Route path="retreat" element={<Navigate to="/foci" replace />} />
       </Route>
     </Routes>
   );
