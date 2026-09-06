@@ -4,7 +4,7 @@ import type { PublicationFilters, RetreatTheme, RetreatWork, YearRange } from ".
 import { Heatmap } from "../components/Heatmap";
 import { NetworkGraph } from "../components/NetworkGraph";
 import { UpsetPlot } from "../components/UpsetPlot";
-import { Card, ErrorNote, KpiCard, Loading } from "../components/ui";
+import { Card, ErrorNote, KpiCard, Loading, Th, useSort, type SortCtl } from "../components/ui";
 import {
   useCollaborationMatrix,
   useFociCombinations,
@@ -41,13 +41,19 @@ export function Foci({ range }: { range: YearRange }) {
   const name = cur?.name;
   const matrix = useCollaborationMatrix(range, true, name);
   const summary = useProgramSummary(range, true, name);
+  const progSort = useSort(summary.data ?? []);
   const net = useNetwork(range, 2, undefined, name);
   const works = useRetreatThemeWorks(sel, member, range);
   const mine = useRetreatThemeWorks(sel, myMemberId ?? undefined, range);
   const people = useRetreatPeople(sel, myMemberId, range);
 
   const [text, setText] = useState("");
-  const [filters, setFilters] = useState<PublicationFilters>({ sort: "citations", page: 1 });
+  const [filters, setFilters] = useState<PublicationFilters>({ sort: "citations", descending: true, page: 1 });
+  const serverSort: SortCtl = {
+    sort: { key: filters.sort ?? "citations", dir: filters.descending ? -1 : 1 },
+    toggle: (key, first) =>
+      setFilters((f) => ({ ...f, sort: key, descending: f.sort === key ? !f.descending : first === -1, page: 1 })),
+  };
   useEffect(() => {
     const t = setTimeout(() => setFilters((f) => ({ ...f, q: text || undefined, page: 1 })), 350);
     return () => clearTimeout(t);
@@ -58,7 +64,6 @@ export function Foci({ range }: { range: YearRange }) {
     focus: name,
     minYear: range.minYear,
     maxYear: range.maxYear,
-    descending: true,
     page_size: PAGE_SIZE,
   });
 
@@ -271,14 +276,14 @@ export function Foci({ range }: { range: YearRange }) {
                 <table className="data compact">
                   <thead>
                     <tr>
-                      <th>Program</th>
-                      <th className="num">Publications</th>
-                      <th className="num">Median RCR</th>
-                      <th className="num">Inter %</th>
+                      <Th k="program" ctl={progSort}>Program</Th>
+                      <Th k="publications" ctl={progSort} num>Publications</Th>
+                      <Th k="median_rcr" ctl={progSort} num>Median RCR</Th>
+                      <Th k="pct_inter_program" ctl={progSort} num>Inter %</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {summary.data.map((r) => (
+                    {progSort.rows.map((r) => (
                       <tr key={r.program}>
                         <td>{r.program}</td>
                         <td className="num">{fmtInt(r.publications)}</td>
@@ -370,7 +375,7 @@ export function Foci({ range }: { range: YearRange }) {
           >
             <div className="filters">
               <input placeholder="Search title & abstract…" value={text} onChange={(e) => setText(e.target.value)} style={{ minWidth: 240 }} />
-              <select value={filters.sort} onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value, page: 1 }))}>
+              <select value={filters.sort} onChange={(e) => setFilters((f) => ({ ...f, sort: e.target.value, descending: e.target.value !== "title", page: 1 }))}>
                 <option value="citations">Sort: Citations</option>
                 <option value="rcr">Sort: RCR</option>
                 <option value="fwci">Sort: FWCI</option>
@@ -383,12 +388,12 @@ export function Foci({ range }: { range: YearRange }) {
             <table className="data">
               <thead>
                 <tr>
-                  <th>Title</th>
-                  <th>Year</th>
+                  <Th k="title" ctl={serverSort}>Title</Th>
+                  <Th k="year" ctl={serverSort} num>Year</Th>
                   <th>Journal</th>
                   <th>Programs</th>
-                  <th className="num">Cites</th>
-                  <th className="num">RCR</th>
+                  <Th k="citations" ctl={serverSort} num>Cites</Th>
+                  <Th k="rcr" ctl={serverSort} num>RCR</Th>
                 </tr>
               </thead>
               <tbody>

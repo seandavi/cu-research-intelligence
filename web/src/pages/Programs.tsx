@@ -11,7 +11,7 @@ import {
 import type { YearRange } from "../api/types";
 import { Heatmap } from "../components/Heatmap";
 import { UpsetPlot } from "../components/UpsetPlot";
-import { Card, Caveat, ErrorNote, Loading } from "../components/ui";
+import { Card, Caveat, ErrorNote, Loading, Th, useSort } from "../components/ui";
 import {
   useCollaborationMatrix,
   useProgramCombinations,
@@ -24,6 +24,7 @@ export function Programs({ range }: { range: YearRange }) {
   const summary = useProgramSummary(range, currentOnly);
   const matrix = useCollaborationMatrix(range, currentOnly);
   const combos = useProgramCombinations(range, currentOnly);
+  const sorted = useSort(summary.data ?? []);
 
   if (summary.isLoading || matrix.isLoading) return <Loading />;
   if (summary.error) return <ErrorNote error={summary.error} />;
@@ -97,17 +98,17 @@ export function Programs({ range }: { range: YearRange }) {
         <table className="data">
           <thead>
             <tr>
-              <th>Program</th>
-              <th className="num">Publications</th>
-              <th className="num">Citations</th>
-              <th className="num">Mean FWCI</th>
-              <th className="num">Median RCR</th>
-              <th className="num">Inter %</th>
-              <th className="num">Intra %</th>
+              <Th k="program" ctl={sorted}>Program</Th>
+              <Th k="publications" ctl={sorted} num>Publications</Th>
+              <Th k="citations" ctl={sorted} num>Citations</Th>
+              <Th k="mean_fwci" ctl={sorted} num>Mean FWCI</Th>
+              <Th k="median_rcr" ctl={sorted} num>Median RCR</Th>
+              <Th k="pct_inter_program" ctl={sorted} num>Inter %</Th>
+              <Th k="pct_intra_program" ctl={sorted} num>Intra %</Th>
             </tr>
           </thead>
           <tbody>
-            {rows.map((r) => (
+            {sorted.rows.map((r) => (
               <tr key={r.program}>
                 <td>{r.program}</td>
                 <td className="num">{fmtInt(r.publications)}</td>

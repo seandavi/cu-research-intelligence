@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { api } from "../api/client";
 import type { ChatResponse } from "../api/types";
-import { Card } from "../components/ui";
+import { Card, Th, useSort } from "../components/ui";
 import { track } from "../lib/analytics";
 
 const EXAMPLES = [
@@ -125,9 +125,10 @@ function Answer({
   onPick: (q: string) => void;
   showSuggestions: boolean;
 }) {
-  if (response.error) return <div className="msg assistant error">{response.error}</div>;
   const table = response.table ?? [];
   const cols = table.length ? Object.keys(table[0]) : [];
+  const sorted = useSort(table);
+  if (response.error) return <div className="msg assistant error">{response.error}</div>;
   return (
     <div className="msg assistant">
       <div className="answer-text">{response.answer}</div>
@@ -143,12 +144,12 @@ function Answer({
             <thead>
               <tr>
                 {cols.map((c) => (
-                  <th key={c}>{c}</th>
+                  <Th key={c} k={c} ctl={sorted} num={typeof table[0][c] === "number"}>{c}</Th>
                 ))}
               </tr>
             </thead>
             <tbody>
-              {table.slice(0, 50).map((row, i) => (
+              {sorted.rows.slice(0, 50).map((row, i) => (
                 <tr key={i}>
                   {cols.map((c) => (
                     <td key={c}>{String(row[c] ?? "")}</td>

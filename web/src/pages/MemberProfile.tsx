@@ -10,7 +10,7 @@ import {
   YAxis,
 } from "recharts";
 import type { YearRange } from "../api/types";
-import { Card, Caveat, ErrorNote, KpiCard, Loading } from "../components/ui";
+import { Card, Caveat, ErrorNote, KpiCard, Loading, Th, useSort } from "../components/ui";
 import { useMemberLinks, useMemberProfile } from "../hooks/useApi";
 import { track } from "../lib/analytics";
 import { fmtInt, fmtMoney, fmtNum, fmtPct } from "../lib/format";
@@ -29,6 +29,7 @@ export function MemberProfile({ range }: { range: YearRange }) {
   const memberId = id ? Number(id) : undefined;
   const profile = useMemberProfile(memberId, range);
   const cogrant = useMemberLinks(memberId, "cogrant");
+  const grantSort = useSort(profile.data?.grants ?? []);
 
   useEffect(() => {
     if (memberId !== undefined) track("view_member_profile", { member_id: memberId });
@@ -145,16 +146,16 @@ export function MemberProfile({ range }: { range: YearRange }) {
           <table className="data">
             <thead>
               <tr>
-                <th>Project</th>
-                <th>Type</th>
-                <th>NIH IC</th>
-                <th>Title</th>
-                <th className="num">Latest FY</th>
-                <th className="num">Total award</th>
+                <Th k="core_project_num" ctl={grantSort}>Project</Th>
+                <Th k="activity_code" ctl={grantSort}>Type</Th>
+                <Th k="agency" ctl={grantSort}>NIH IC</Th>
+                <Th k="title" ctl={grantSort}>Title</Th>
+                <Th k="latest_fy" ctl={grantSort} num>Latest FY</Th>
+                <Th k="total_award" ctl={grantSort} num>Total award</Th>
               </tr>
             </thead>
             <tbody>
-              {grants.map((g) => (
+              {grantSort.rows.map((g) => (
                 <tr key={g.core_project_num}>
                   <td>
                     <a
