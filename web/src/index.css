@@ -161,3 +161,7 @@ tr.sel td { background: #eef2f7; }
 td.group { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.04em; padding-top: 0.6rem; }
 li.starred { font-weight: 600; }
 .badge.ec { background: #e0f2e9; color: #1f6f3c; margin-left: 0.35rem; }
+
+.prose { line-height: 1.55; padding-left: 1.2rem; }
+.prose li { margin-bottom: 0.45rem; }
+.diagram { font-size: 0.78rem; line-height: 1.4; overflow-x: auto; background: #f6f8fa; padding: 0.8rem 1rem; border-radius: 8px; border: 1px solid var(--line); }

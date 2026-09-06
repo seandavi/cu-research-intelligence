@@ -72,7 +72,7 @@ def test_themes_report_and_api():
     assert {p["program"] for p in ct["by_program"]} == set(retreat.CURRENT_PROGRAMS)
     assert len(ct["pairs"]) == 6 and ct["by_year"]
     assert ct["top_members"] and ct["top_members"][0]["publications"] > 0
-    assert ct["top_topics"]
+    assert ct["top_topics"] and {"topic", "topic_id", "publications"} <= set(ct["top_topics"][0])
 
     # provenance: the member's theme works exist and are within the window
     works = retreat.theme_works(0, member_id=top["member_id"])

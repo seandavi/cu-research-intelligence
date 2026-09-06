@@ -21,6 +21,8 @@ from ..state import get_watermark
 from ..storage import local_data_root, state_db_path
 from .paths import cc_target, serving_db_path
 
+_TOPICS_GLOB = "data/openalex/dimensions/topics/*.parquet"
+
 # Marts the serving layer requires; the build always produces these.
 _REQUIRED = ("members", "works", "member_works")
 # Marts added by later flows (institutions, NIH grants, membership spine);
@@ -68,6 +70,13 @@ def bake_serving_db() -> str:
             path = cc_target(name)
             if Path(path).exists():
                 con.execute(f"CREATE TABLE {name} AS SELECT * FROM '{path}'")
+
+        # OpenAlex topic ids (dimension built by flows.dimensions_flow) so topic lists
+        # can link out to openalex.org; names are unique across the ~4.5k topics.
+        if any(Path().glob(_TOPICS_GLOB)):
+            con.execute(
+                f"CREATE TABLE topic AS SELECT topic_id, display_name FROM '{_TOPICS_GLOB}'"
+            )
 
         # Materialize the BM25 index into the file so it is not rebuilt on the
         # first search in every container (ADR-0016). Older builds without

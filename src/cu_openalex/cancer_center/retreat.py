@@ -358,6 +358,15 @@ def _tagged(idxs: list[int], min_year: int | None, max_year: int | None) -> tupl
 
 
 @lru_cache(maxsize=1)
+def _topic_ids() -> dict[str, str]:
+    """OpenAlex topic name -> id (``T…``), for linking out; empty if not baked."""
+    if not q.table_exists("topic"):
+        return {}
+    df = q.run_sql("SELECT display_name, topic_id FROM topic")
+    return dict(zip(df["display_name"].to_list(), df["topic_id"].to_list(), strict=True))
+
+
+@lru_cache(maxsize=1)
 def _members() -> dict[int, dict]:
     joined = (
         "(SELECT member_id, year(min(event_date)) AS joined_year "
@@ -488,7 +497,12 @@ def themes_report(
                     for m in active_rows[:top]
                 ],
                 "top_topics": [
-                    {"topic": r["key"], "publications": r["n"]} for r in lvl("topic")[:top]
+                    {
+                        "topic": r["key"],
+                        "topic_id": _topic_ids().get(r["key"]),
+                        "publications": r["n"],
+                    }
+                    for r in lvl("topic")[:top]
                 ],
             }
         )

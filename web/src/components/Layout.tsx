@@ -12,6 +12,7 @@ const NAV = [
   { to: "/networks", label: "Networks" },
   { to: "/members", label: "Members" },
   { to: "/ask", label: "Ask" },
+  { to: "/about", label: "About" },
 ];
 
 // Footer labels for the freshness stamps in /api/meta; unknown keys are skipped.

@@ -24,6 +24,7 @@ const MemberProfile = lazy(() =>
   import("./pages/MemberProfile").then((m) => ({ default: m.MemberProfile })),
 );
 const Ask = lazy(() => import("./pages/Ask").then((m) => ({ default: m.Ask })));
+const About = lazy(() => import("./pages/About").then((m) => ({ default: m.About })));
 
 export function App() {
   const meta = useMeta();
@@ -55,6 +56,7 @@ export function App() {
         <Route path="members" element={<WithFilter range={range} setRange={setRange}>{(r) => <Members range={r} />}</WithFilter>} />
         <Route path="members/:id" element={<WithFilter range={range} setRange={setRange}>{(r) => <MemberProfile range={r} />}</WithFilter>} />
         <Route path="ask" element={<Ask />} />
+        <Route path="about" element={<About />} />
         <Route path="retreat" element={<Navigate to="/foci" replace />} />
       </Route>
     </Routes>
