@@ -168,17 +168,16 @@ and the Strategic Plan foci (quoted from the retreat page): `docs/retreat-2026-r
       Strategic Plan foci + two keynote themes over cancer-relevant member works
       (`pub_classification` now baked); per program / pair / year / member / topic;
       provenance (`/themes/{i}/works`) and people-to-meet (`/themes/{i}/people`).
-- [x] Submissions store `app/retreat.py` (`retreat_entry`): CSV importer with
-      `--map`, upsert by form response id, role-scoped visibility, decision audit.
+- [x] ~~Submissions store `app/retreat.py` (`retreat_entry`)~~ — removed 2026-09-06
+      (no submission panel or data; retreat forms live outside this app).
 - [x] `/retreat` page; two persona-review rounds (external EAB reviewer, chair,
       research admin, member PI, panel moderator) drove the design.
 - [x] Folded into `/foci` (#41): one page for foci; `/retreat` redirects there.
+      Tabs switch between the five foci (and the trial themes).
 - [ ] Session builder (decision → session slot, capacity, program mix) and draft
       agenda export
 - [ ] Panelist evidence beyond publications: NIH trial grants, author position,
       early-career flag; CTO/OnCore or ClinicalTrials.gov PI-ship (new data domain)
-- [ ] Reviewer assignment + scoring for abstracts; program-book export
-- [ ] Self-serve identity claim so non-member lab staff can see their submissions
 - [ ] Replace keyword themes with classifier labels when ADR-0027 stage 2 lands
 
 ## Backlog / ideas

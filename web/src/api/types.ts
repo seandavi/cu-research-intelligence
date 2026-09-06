@@ -353,37 +353,6 @@ export interface RetreatPerson {
   early_career: boolean;
 }
 
-export type RetreatKind = "abstract" | "question" | "registration";
-
-export interface RetreatEntry {
-  id: number;
-  kind: RetreatKind;
-  source_id: string | null;
-  name: string;
-  email: string | null;
-  member_id: number | null;
-  program: string | null;
-  role: string | null;
-  title: string | null;
-  body: string | null;
-  category: string | null;
-  decision: string | null;
-  decided_by: string | null;
-  decided_at: string | null;
-  extra: Record<string, string>;
-  import_file: string | null;
-  imported_at: string | null;
-  created_at: string;
-  updated_at: string;
-  themes: string[];
-  mine: boolean;
-}
-
-export interface RetreatEntries {
-  organizer: boolean;
-  entries: RetreatEntry[];
-}
-
 export interface Me {
   authenticated: boolean;
   user_id?: number;

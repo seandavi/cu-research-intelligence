@@ -13,34 +13,24 @@ import {
   useNetwork,
   useProgramSummary,
   usePublications,
-  useRetreatEntries,
   useRetreatPeople,
   useRetreatThemeWorks,
   useRetreatThemes,
 } from "../hooks/useApi";
 import { downloadCsv, fmtInt, fmtNum, fmtPct, initials, programColors, shortFocus, shorten } from "../lib/format";
-import { Abstracts, Mine, Questions, Registrations } from "./foci/Submissions";
 import { PublicationRowView } from "./Publications";
 
 const PAGE_SIZE = 25;
-const RETREAT_DATE = "2026-11-20";
-const ABSTRACT_DEADLINE = "2026-09-14";
-const RETREAT_INFO_URL =
-  "https://medschool.cuanschutz.edu/colorado-cancer-center/research/cancer-center-scientific-retreat";
 const EC = <span className="badge ec" title="Assistant professor / instructor, or joined 2020 or later">early-career</span>;
-const daysUntil = (iso: string) => Math.ceil((new Date(iso).getTime() - Date.now()) / 86_400_000);
 
 // Strategic foci (issues #38, #41): the FY26–31 Strategic Plan foci and the retreat's
-// clinical-trial themes over members' cancer-relevant publications — one place for
-// foci, with the Retreat 2026 submissions at the bottom.
+// clinical-trial themes over members' cancer-relevant publications — one place for foci.
 export function Foci({ range }: { range: YearRange }) {
   const meta = useMeta();
   const me = useMe();
   const report = useRetreatThemes(range);
   const combos = useFociCombinations(range);
-  const signedIn = me.data?.authenticated === true;
   const myMemberId = me.data?.member_id ?? null;
-  const entries = useRetreatEntries(signedIn);
   const [sel, setSel] = useState(0);
   const [showHow, setShowHow] = useState(false);
   const [member, setMember] = useState<number | undefined>();
@@ -83,10 +73,6 @@ export function Foci({ range }: { range: YearRange }) {
 
   const { denominator: d, window } = report.data!;
   const programs = [...(meta.data?.current_programs ?? [])].sort();
-  const organizer = entries.data?.organizer ?? false;
-  const rows = entries.data?.entries ?? [];
-  const abstracts = rows.filter((r) => r.kind === "abstract");
-  const deadline = daysUntil(ABSTRACT_DEADLINE);
   const page = filters.page ?? 1;
   const total = pubs.data?.total ?? 0;
   const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
@@ -141,14 +127,6 @@ export function Foci({ range }: { range: YearRange }) {
               <th title="Publications per year across the window">Trend</th>
               <th className="num" title="NIH iCite Relative Citation Ratio (1.0 = median NIH paper)">Median RCR</th>
               <th className="num" title="Share of iCite-scored papers at NIH percentile ≥ 90">Top 10%</th>
-              {organizer && (
-                <>
-                  <th className="num" title="Submitted abstracts whose title/text matches the focus">Abstracts</th>
-                  <th className="num">Oral</th>
-                  <th className="num">Disc.</th>
-                  <th className="num">Poster</th>
-                </>
-              )}
             </tr>
           </thead>
           <tbody>
@@ -156,7 +134,7 @@ export function Foci({ range }: { range: YearRange }) {
               <Fragment key={th.name}>
                 {(i === 0 || themes[i - 1].group !== th.group) && (
                   <tr>
-                    <td colSpan={8 + programs.length + (organizer ? 4 : 0)} className="muted group">{th.group}</td>
+                    <td colSpan={8 + programs.length} className="muted group">{th.group}</td>
                   </tr>
                 )}
                 <tr className={`clickable ${i === sel ? "sel" : ""} ${th.footnote ? "muted" : ""}`} onClick={() => setSel(i)}>
@@ -187,16 +165,6 @@ export function Foci({ range }: { range: YearRange }) {
                   </td>
                   <td className="num">{fmtNum(th.median_rcr)}</td>
                   <td className="num">{fmtPct(th.pct_top_10)}</td>
-                  {organizer && (
-                    <>
-                      <td className="num">{fmtInt(abstracts.filter((a) => a.themes.includes(th.name)).length)}</td>
-                      {["oral", "discussion", "poster"].map((dec) => (
-                        <td key={dec} className="num">
-                          {fmtInt(abstracts.filter((a) => a.themes.includes(th.name) && a.decision === dec).length)}
-                        </td>
-                      ))}
-                    </>
-                  )}
                 </tr>
               </Fragment>
             ))}
@@ -227,6 +195,25 @@ export function Foci({ range }: { range: YearRange }) {
 
       {cur && (
         <>
+          <div className="tabs" role="tablist" aria-label="Strategic Plan focus">
+            {themes.map((t, i) =>
+              t.group.startsWith("Strategic Plan") ? (
+                <button key={t.name} role="tab" aria-selected={i === sel} className={`tab ${i === sel ? "on" : ""}`} onClick={() => setSel(i)}>
+                  {shortFocus(t.name)}
+                </button>
+              ) : null,
+            )}
+          </div>
+          <div className="tabs sub" role="tablist" aria-label="Clinical-trial theme">
+            <span className="chips-label">Clinical-trial themes:</span>
+            {themes.map((t, i) =>
+              t.group.startsWith("Strategic Plan") ? null : (
+                <button key={t.name} role="tab" aria-selected={i === sel} className={`tab ${i === sel ? "on" : ""}`} onClick={() => setSel(i)}>
+                  {shortFocus(t.name)}
+                </button>
+              ),
+            )}
+          </div>
           <h3 className="section">{cur.name}</h3>
           <div className="kpi-row">
             <KpiCard label="Publications" value={fmtInt(cur.publications)} hint="Cancer-relevant, peer-reviewed, in window" />
@@ -414,39 +401,6 @@ export function Foci({ range }: { range: YearRange }) {
               </button>
             </div>
           </Card>
-        </>
-      )}
-
-      <h3 className="section">Retreat 2026 submissions</h3>
-      <p className="muted">
-        Abstracts due {ABSTRACT_DEADLINE}{deadline >= 0 ? ` (${deadline} days)` : " (closed)"} · decisions
-        October 21 · retreat {RETREAT_DATE} ({daysUntil(RETREAT_DATE)} days) ·{" "}
-        <a href={RETREAT_INFO_URL}>Guidelines &amp; forms</a>
-      </p>
-      {!signedIn ? (
-        <Card title="Submissions">
-          <p className="muted">
-            Abstracts, panel questions, and registrations are visible to signed-in CU Anschutz
-            users (your own) and to the retreat committee (all).{" "}
-            {me.error ? (
-              <span>The submissions store is not enabled on this deployment.</span>
-            ) : (
-              <a href="/api/auth/login">Sign in</a>
-            )}
-          </p>
-        </Card>
-      ) : entries.error ? (
-        <ErrorNote error={entries.error} />
-      ) : organizer ? (
-        <>
-          <Abstracts rows={abstracts} />
-          <Questions rows={rows.filter((r) => r.kind === "question")} organizer />
-          <Registrations rows={rows.filter((r) => r.kind === "registration")} programs={programs} />
-        </>
-      ) : (
-        <>
-          <Mine rows={rows.filter((r) => r.mine)} />
-          <Questions rows={rows.filter((r) => r.kind === "question")} organizer={false} />
         </>
       )}
     </>
