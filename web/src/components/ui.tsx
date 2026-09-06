@@ -144,9 +144,9 @@ export function Th({
   const first = num ? -1 : 1;
   const onClick = () => {
     ctl.toggle(k, first);
-    // ponytail: mirrors useSort's cycle; server-sorted tables flip instead of reaching "none".
-    const next = dir === 0 ? first : dir === first ? -first : 0;
-    track("sort_table", { page: window.location.pathname, column: k, direction: next === 0 ? "none" : next === 1 ? "asc" : "desc" });
+    // Direction is not reported: client and server ctls cycle differently, so the next state
+    // is not knowable here without duplicating both rules.
+    track("sort_table", { page: window.location.pathname, column: k });
   };
   return (
     <th

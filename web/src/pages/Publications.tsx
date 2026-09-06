@@ -95,7 +95,7 @@ export function Publications({ range }: { range: YearRange }) {
             value={filters.collaboration_class ?? ""}
             onChange={(e) => {
               patch({ collaboration_class: e.target.value || undefined });
-              track("filter_collaboration", { value: e.target.value || "any" });
+              track("filter_collaboration", { collaboration: e.target.value || "any" });
             }}
           >
             <option value="">Any collaboration</option>
