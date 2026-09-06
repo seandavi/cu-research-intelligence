@@ -19,6 +19,7 @@ import {
   useMeta,
   usePublicationsByYear,
 } from "../hooks/useApi";
+import { track } from "../lib/analytics";
 import { fmtInt, fmtNum, fmtPct } from "../lib/format";
 
 // One row per nav tab (issue #48). "Scope" is the population each tab counts; today all
@@ -81,7 +82,7 @@ export function Overview({ range }: { range: YearRange }) {
         Cancer Center, from OpenAlex and the membership roster.
       </p>
 
-      <details className="guide">
+      <details className="guide" onToggle={(e) => e.currentTarget.open && track("open_guide")}>
         <summary>New here? What each tab shows</summary>
         <p className="hint">
           Every tab counts the work of <strong>Cancer Center members</strong> on the roster —
@@ -101,7 +102,7 @@ export function Overview({ range }: { range: YearRange }) {
           <tbody>
             {GUIDE.filter((g) => !g.needsGrants || meta.data?.grants_available).map((g) => (
               <tr key={g.to}>
-                <td><Link to={g.to}>{g.tab}</Link></td>
+                <td><Link to={g.to} onClick={() => track("guide_tab_click", { tab: g.tab })}>{g.tab}</Link></td>
                 <td>{g.answers}</td>
                 <td>{g.scope}</td>
                 <td className="muted">{g.caveat}</td>

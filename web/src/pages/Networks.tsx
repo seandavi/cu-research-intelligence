@@ -3,6 +3,7 @@ import type { YearRange } from "../api/types";
 import { NetworkGraph } from "../components/NetworkGraph";
 import { Card, Caveat, ErrorNote, Loading, Th, useSort } from "../components/ui";
 import { useMeta, useNetwork } from "../hooks/useApi";
+import { trackDebounced } from "../lib/analytics";
 import { fmtInt, fmtNum, programColors } from "../lib/format";
 
 export function Networks({ range }: { range: YearRange }) {
@@ -42,7 +43,10 @@ export function Networks({ range }: { range: YearRange }) {
           min={1}
           max={10}
           value={minShared}
-          onChange={(e) => setMinShared(Number(e.target.value))}
+          onChange={(e) => {
+            setMinShared(Number(e.target.value));
+            trackDebounced("network_threshold", { min_shared: Number(e.target.value) });
+          }}
         />
       </div>
 

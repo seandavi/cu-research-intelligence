@@ -162,6 +162,7 @@ export function MemberProfile({ range }: { range: YearRange }) {
                       href={`https://reporter.nih.gov/search/?projects=${g.core_project_num}`}
                       target="_blank"
                       rel="noreferrer"
+                      onClick={() => track("outbound_link", { kind: "reporter", project: g.core_project_num })}
                     >
                       {g.core_project_num}
                     </a>
@@ -233,7 +234,7 @@ export function MemberProfile({ range }: { range: YearRange }) {
                     <span className="muted">
                       {" · "}
                       {type === "orcid" ? (
-                        <a href={`https://orcid.org/${values[0]}`} target="_blank" rel="noreferrer">
+                        <a href={`https://orcid.org/${values[0]}`} target="_blank" rel="noreferrer" onClick={() => track("outbound_link", { kind: "orcid" })}>
                           {values[0]}
                         </a>
                       ) : values.length > 2 ? (

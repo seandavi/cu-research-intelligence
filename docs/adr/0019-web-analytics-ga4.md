@@ -27,6 +27,15 @@ the high-value interactions: `search` (Publications FTS, with `search_term`),
 `view_member_profile` (`member_id`). Events carry **ids and counts, never names
 or emails** — no PII.
 
+Added 2026-09-06 (issue #50): `sort_table` (`page`, `column`, sent
+once from the shared `<Th>` header), `open_guide` and `guide_tab_click` (`tab`)
+on the Overview guide, `select_focus` (`focus`, a fixed label), `change_year_range`
+(`min_year`, `max_year`, debounced so one event per settled value),
+`filter_collaboration` (`collaboration`; `value` is reserved in GA4), `network_threshold` (`min_shared`, debounced),
+and `outbound_link` (`kind` = doi/pubmed/reporter/orcid/openalex_topic, plus the
+work or project id). Free text leaves the site only in `search`'s `search_term`;
+Ask question text is never sent.
+
 ## Consequences
 
 - Usage visibility (popular pages, what people search/ask, which exports) with a
