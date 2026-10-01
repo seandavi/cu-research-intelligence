@@ -1,17 +1,26 @@
-// Google Analytics 4 (gtag.js). The Measurement ID comes from
-// VITE_GA_MEASUREMENT_ID; with none set, every function is a safe no-op so the
-// app runs untracked in dev / when analytics isn't configured. No PII is sent —
-// events carry ids and counts, not names or emails.
+// Google Analytics 4 (gtag.js). Every function is a safe no-op when the tag
+// isn't loaded (dev, preview, tailnet hosts), so the app runs untracked there.
+// No PII is sent — events carry ids and counts, not names or emails.
 
-// GA4 Measurement ID. Defaults to the project property; override per-deployment
-// with VITE_GA_MEASUREMENT_ID (set it to "off" to disable). Not a secret — the
-// ID is visible in the client bundle by design.
-const ENV_ID = import.meta.env.VITE_GA_MEASUREMENT_ID;
-const GA_ID = ENV_ID === "off" ? undefined : (ENV_ID || "G-G7K5N1LWV9");
+// Consolidated "Sean Davis — web" GA4 property (see monode
+// infrastructure/ANALYTICS.md). Hard-coded: not a secret — the ID is visible in
+// the client bundle by design. Hits are tagged with content_group so this site
+// can be filtered within the shared property.
+const GA_ID = "G-KLLV1GCF4E";
+const CONTENT_GROUP = "uccc-insights";
 let started = false;
 
+// Only production hosts send hits: skip localhost, raw IPs (incl. the tailnet
+// 100.x address), and preview/dev domains.
+function isProductionHost(host: string): boolean {
+  if (!host || host === "localhost" || host.endsWith(".localhost")) return false;
+  if (/^[\d.]+$/.test(host) || host.includes(":")) return false; // IPv4 / IPv6
+  return ![".workers.dev", ".netlify.app", ".ts.net"].some((s) => host.endsWith(s));
+}
+
 export function initAnalytics(): void {
-  if (!GA_ID || started || typeof document === "undefined") return;
+  if (started || typeof document === "undefined") return;
+  if (!isProductionHost(window.location.hostname)) return;
   const s = document.createElement("script");
   s.async = true;
   s.src = `https://www.googletagmanager.com/gtag/js?id=${GA_ID}`;
@@ -24,7 +33,7 @@ export function initAnalytics(): void {
   };
   window.gtag("js", new Date());
   // SPA: we send page_view manually on route change, so disable the automatic one.
-  window.gtag("config", GA_ID, { send_page_view: false });
+  window.gtag("config", GA_ID, { send_page_view: false, content_group: CONTENT_GROUP });
   started = true;
 }
 

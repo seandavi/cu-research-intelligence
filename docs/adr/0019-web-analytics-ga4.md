@@ -14,10 +14,11 @@ instrumentation must avoid PII and not hard-fail when unconfigured.
 ## Decision
 
 **Google Analytics 4** via `gtag.js`, wrapped in a small `analytics` helper.
-The Measurement ID defaults to the center's property in code (it is **not a
-secret** — the ID ships in every client bundle by design) but is overridable per
-deployment with `VITE_GA_MEASUREMENT_ID`, or set to `"off"` to disable; with no
-ID, every helper is a **no-op**.
+The Measurement ID is hard-coded to the consolidated "Sean Davis — web" property
+`G-KLLV1GCF4E` (it is **not a secret** — the ID ships in every client bundle by
+design), with `content_group: 'uccc-insights'` on the config call. The tag only
+loads on production hosts (not localhost, raw/tailnet IPs, or preview domains);
+elsewhere every helper is a **no-op**.
 
 Because it is a SPA, the automatic page_view is disabled and a `page_view` is
 sent manually on each route change. A focused set of **custom events** captures
