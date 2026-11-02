@@ -10,6 +10,8 @@ missing one, so every match carries a ``confidence`` tier and ``method``.
 Matching tiers, highest first:
 
 * ``orcid``         — member ORCID == author ORCID (authoritative).
+* ``vetted``        — the author fits the member's name on >=2 of the member's
+  papers in the Research Team's vetted list (``evidence.py``, #57).
 * ``name_exact_cu`` — exact first+last name, author is current CU.
 * ``name_exact``    — exact first+last name, author not current CU.
 * ``name_initial_cu`` — last name + first initial, author is current CU.
@@ -27,6 +29,7 @@ import polars as pl
 
 from ..storage import duckdb_connect
 from .members import load_members, normalize_name
+from .paths import cc_target
 
 # Curated authors tables, read relative to the storage landing pad: the
 # institution pull, plus members found by ORCID elsewhere (``extra_authors``, #55).
@@ -52,6 +55,7 @@ def authors_sql() -> str:
 # Score per tier; higher wins. ORCID dominates everything.
 _TIER_SCORE = {
     "orcid": 1000,
+    "vetted": 500,
     "name_exact_cu": 100,
     "name_exact": 40,
     "name_initial_cu": 30,
@@ -63,6 +67,7 @@ _TIER_SCORE = {
 # high (ORCID-verified) for the most defensible numbers.
 _CONFIDENCE = {
     "orcid": "high",
+    "vetted": "high",
     "name_exact_cu": "medium",
     "name_exact": "medium",
     "name_initial_cu": "low",
@@ -113,7 +118,17 @@ def _author_name_keys(con) -> pl.DataFrame:
     return rows.filter(pl.col("last_tok").is_not_null() & (pl.col("last_tok") != ""))
 
 
-def _candidates(members: pl.DataFrame, names: pl.DataFrame) -> pl.DataFrame:
+def load_evidence_links() -> pl.DataFrame:
+    """Persisted vetted-evidence links ``(Member_ID, author_id, support, n_vetted)``."""
+    path = cc_target("member_evidence_links")
+    if not Path(path).exists():
+        return pl.DataFrame(schema={"Member_ID": pl.Int64, "author_id": pl.Utf8})
+    return pl.read_parquet(path)
+
+
+def _candidates(
+    members: pl.DataFrame, names: pl.DataFrame, evidence: pl.DataFrame | None = None
+) -> pl.DataFrame:
     """Generate (member, author) candidate pairs with a tier + score."""
     m = members.select("Member_ID", "orcid", "last_norm", "first_norm", "first_initial").rename(
         {"orcid": "m_orcid"}
@@ -133,12 +148,36 @@ def _candidates(members: pl.DataFrame, names: pl.DataFrame) -> pl.DataFrame:
     )
 
     # --- Name candidates: exact last + (exact first OR first initial) ---
-    # An author carrying a roster member's ORCID is that member's (their ORCID
-    # pair outranks any name pair); never offer it to a namesake.
+    # --- Vetted-evidence candidates (author_id known per member) ---
+    author_info = names.select("author_id", "is_current_cu", "works_count").unique("author_id")
+    ev = (
+        evidence
+        if evidence is not None
+        else pl.DataFrame(schema={"Member_ID": pl.Int64, "author_id": pl.Utf8})
+    )
+    vetted_pairs = (
+        ev.select("Member_ID", "author_id")
+        .join(m.select("Member_ID"), on="Member_ID")
+        .join(author_info, on="author_id", how="left")
+        .with_columns(
+            pl.lit("vetted").alias("tier"),
+            pl.col("is_current_cu").fill_null(False),
+            pl.col("works_count").fill_null(0),
+        )
+        .select("Member_ID", "author_id", "tier", "is_current_cu", "works_count")
+    )
+
+    # An author carrying a roster member's ORCID, or tied to a member by vetted
+    # evidence, is that member's (those tiers outrank any name pair); never offer
+    # it to a namesake.
     roster_orcids = m["m_orcid"].drop_nulls().implode()
+    claimed = ev["author_id"].implode()
     name_pairs = (
         m.join(
-            names.filter(~pl.col("orcid").is_in(roster_orcids).fill_null(False)),
+            names.filter(
+                ~pl.col("orcid").is_in(roster_orcids).fill_null(False)
+                & ~pl.col("author_id").is_in(claimed)
+            ),
             left_on="last_norm",
             right_on="last_tok",
             how="inner",
@@ -163,7 +202,7 @@ def _candidates(members: pl.DataFrame, names: pl.DataFrame) -> pl.DataFrame:
         .select("Member_ID", "author_id", "tier", "is_current_cu", "works_count")
     )
 
-    pairs = pl.concat([orcid_pairs, name_pairs])
+    pairs = pl.concat([orcid_pairs, vetted_pairs, name_pairs])
     pairs = pairs.with_columns(
         pl.col("tier").replace_strict(_TIER_SCORE, return_dtype=pl.Int64).alias("score")
     )
@@ -173,7 +212,9 @@ def _candidates(members: pl.DataFrame, names: pl.DataFrame) -> pl.DataFrame:
     )
 
 
-def build_crosswalk(members: pl.DataFrame | None = None) -> pl.DataFrame:
+def build_crosswalk(
+    members: pl.DataFrame | None = None, evidence: pl.DataFrame | None = None
+) -> pl.DataFrame:
     """Resolve every member to its best OpenAlex author.
 
     Returns one row per member (matched or not) with: ``author_id``, ``method``,
@@ -181,9 +222,10 @@ def build_crosswalk(members: pl.DataFrame | None = None) -> pl.DataFrame:
     ``ambiguous`` (>1 candidate at the winning tier).
     """
     members = load_members() if members is None else members
+    evidence = load_evidence_links() if evidence is None else evidence
     with duckdb_connect(database=":memory:") as con:
         names = _author_name_keys(con)
-    cands = _candidates(members, names)
+    cands = _candidates(members, names, evidence)
 
     if cands.height == 0:
         best = members.select("Member_ID").with_columns(
@@ -228,6 +270,21 @@ def build_crosswalk(members: pl.DataFrame | None = None) -> pl.DataFrame:
         .alias("confidence"),
     )
     return out.drop("n_top")
+
+
+def author_links(members: pl.DataFrame, evidence: pl.DataFrame | None = None) -> pl.DataFrame:
+    """Every extra author_id attributed to a member, with its ``method``.
+
+    ``orcid``: authors carrying the member's ORCID (split profiles). ``vetted``:
+    the member's vetted-evidence links (``load_evidence_links`` by default).
+    """
+    evidence = load_evidence_links() if evidence is None else evidence
+    return pl.concat(
+        [
+            orcid_author_links(members).with_columns(method=pl.lit("orcid")),
+            evidence.select("Member_ID", "author_id").with_columns(method=pl.lit("vetted")),
+        ]
+    ).unique(subset=["Member_ID", "author_id"], keep="first")
 
 
 def orcid_author_links(members: pl.DataFrame) -> pl.DataFrame:

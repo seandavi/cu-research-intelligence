@@ -30,7 +30,7 @@ from .programs import (
     home_institutions_sql,
     publication_types_sql,
 )
-from .resolve import authors_sql, build_crosswalk, orcid_author_links
+from .resolve import author_links, authors_sql, build_crosswalk
 
 _WORKS_GLOB = "data/openalex/works/**/*.parquet"
 _RAW_WORKS_GLOB = "data/openalex/raw/works/**/*.parquet"
@@ -61,22 +61,32 @@ MAX_PLAUSIBLE_WORKS_ORCID = 5000
 
 
 def _author_program_map(
-    crosswalk: pl.DataFrame, orcid_links: pl.DataFrame | None = None
+    crosswalk: pl.DataFrame, links: pl.DataFrame | None = None
 ) -> pl.DataFrame:
     """One row per resolved author_id -> (member_id, program, confidence, method).
 
-    ``orcid_links`` adds every other author_id carrying an ORCID-matched member's
-    ORCID (OpenAlex split profiles), with that member's attributes. If two members
-    resolve to the same author_id (name collision), keep the highest-confidence,
-    then most-recent member to avoid double-counting.
+    ``links`` (``Member_ID, author_id, method``) adds a member's other author_ids,
+    with that member's attributes: ``orcid`` links (split profiles carrying an
+    ORCID-matched member's ORCID) and ``vetted`` links (profiles tied to the member
+    by the Research Team's vetted papers, #57). Link rows are high confidence and
+    keep the link's method, so the conflation cap matches how they were found.
+    If two members resolve to the same author_id (name collision), keep the
+    highest-confidence, then most-recent member to avoid double-counting.
     """
     conf_rank = {"high": 3, "medium": 2, "low": 1}
     resolved = crosswalk.filter(pl.col("author_id").is_not_null())
-    if orcid_links is not None and orcid_links.height:
-        split = orcid_links.join(
-            resolved.filter(pl.col("method") == "orcid").drop("author_id"), on="Member_ID"
-        ).select(resolved.columns)
-        resolved = pl.concat([resolved, split]).unique(subset=["Member_ID", "author_id"])
+    if links is not None and links.height:
+        split = (
+            links.join(resolved.drop("author_id", "method"), on="Member_ID")
+            # ORCID links only extend members whose identity ORCID verified.
+            .join(resolved.select("Member_ID", member_method="method"), on="Member_ID")
+            .filter((pl.col("method") == "vetted") | (pl.col("member_method") == "orcid"))
+            .with_columns(confidence=pl.lit("high"))
+            .select(resolved.columns)
+        )
+        resolved = pl.concat([resolved, split]).unique(
+            subset=["Member_ID", "author_id"], keep="first"
+        )
     resolved = resolved.with_columns(
         pl.col("confidence")
         .replace_strict(conf_rank, default=0, return_dtype=pl.Int64)
@@ -194,7 +204,7 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
     crosswalk = build_crosswalk(members)
     rank = {"high": 3, "medium": 2, "low": 1}
     floor = rank[min_confidence]
-    amap = _author_program_map(crosswalk, orcid_author_links(members)).filter(
+    amap = _author_program_map(crosswalk, author_links(members)).filter(
         pl.col("confidence").replace_strict(rank, default=0, return_dtype=pl.Int64) >= floor
     )
 

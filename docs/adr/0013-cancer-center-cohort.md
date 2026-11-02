@@ -71,6 +71,18 @@ their works via the API into the raw layer, and adds them to the works scan's
 target set. Checked against the Research Team's vetted list (`vetted.py`, run
 by the build), recall of vetted (PMID, member) pairs rose from 81.4% to 87.7%.
 
+**Vetted-evidence tier** (amended 2026-11, #57): the Research Team's vetted list
+is human-verified (PMID, member) evidence. `evidence.py` looks up each vetted
+paper's OpenAlex authorships, and an author whose name fits the member on ≥2
+of that member's vetted papers becomes a `vetted` match (high confidence;
+below ORCID, above every name tier). Authorships fitting two members on one
+paper are skipped, ORCID-owned profiles stay with their owner, and evidence
+profiles still face the 2,000-work cap. Links persist in
+`member_evidence_links.parquet` so builds without the sheet keep them. Recall:
+87.7% → 95.2% overall. On a held-out test (evidence from FY2016–24 only, scored
+on FY2025–26) recall went from 85.5% to 87.5%, which is the honest estimate of
+the gain on new papers: the in-sample number is circular.
+
 **Document-type filter** (critical): a 2023 OpenAlex bulk-index event injected
 thousands of AACR *supplementary-materials* and *preprint* records (titles like
 "Figure S3 from…", "Data from…") that inflated 2023 publications ~2.3× and

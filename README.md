@@ -183,8 +183,9 @@ natural-language interface that turns questions into read-only SQL with Gemini
 (set `GEMINI_API_KEY` on the server; model via `CU_OPENALEX_CHAT_MODEL`).
 
 **Method & caveats** (ADR-0013): members are matched by ORCID + name with a
-recorded confidence tier; ~736/1,115 resolve (members at consortium partners are
-found by ORCID across institutions), so collaboration counts are lower bounds. A conflation guard drops OpenAlex `author_id`s with impossible
+recorded confidence tier, plus evidence from the Research Team's vetted
+publication list; ~773/1,115 resolve (members at consortium partners are found by
+ORCID across institutions), so collaboration counts are lower bounds. A conflation guard drops OpenAlex `author_id`s with impossible
 `works_count`. Counts are peer-reviewed articles & reviews — preprints,
 supplementary files, datasets, and **conference abstracts** are excluded.
 Within-year *ratios* (collaboration %, OA %, FWCI, RCR) are more reliable than
