@@ -9,7 +9,9 @@ even with a valid roster ORCID. This step closes that gap:
    author_id carrying it — OpenAlex often splits one person across several IDs.
    Curated rows land in ``openalex/authors/extra/authors.parquet``, which the
    resolver and build read alongside ``authors/current``.
-2. Backfill those authors' works via the API into the raw works layer (the same
+2. When the Research Team's vetted sheet is present, derive vetted-evidence
+   links (``evidence.py``, #57) and add those authors too.
+3. Backfill those authors' works via the API into the raw works layer (the same
    verbatim-JSON layer the snapshot scan writes), then re-curate. The works flow
    adds these IDs to its target set, so later incremental snapshot scans keep
    them current.
@@ -30,7 +32,12 @@ from .. import state, storage, transform
 from ..config import Settings, get_settings
 from ..openalex.authors import DEFAULT_AUTHOR_SELECT
 from ..openalex.client import OpenAlexClient
+from .build import MAX_PLAUSIBLE_WORKS_ORCID
+from .evidence import evidence_links, fetch_authorships
 from .members import load_members
+from .paths import cc_target
+from .resolve import orcid_author_links
+from .vetted import latest_vetted_xlsx, vetted_pairs
 
 # OpenAlex caps OR-filters at 100 values; stay well under.
 _BATCH = 50
@@ -41,11 +48,12 @@ _BATCH = 50
 _RAW_STEM = "api_extra_authors"
 
 
-async def _fetch_by_orcid(orcids: list[str], s: Settings) -> list[dict]:
+async def _fetch_authors(key: str, values: list[str], s: Settings) -> list[dict]:
+    """Authors matching any of ``values`` on filter ``key`` (``orcid``, ``openalex``)."""
     out: list[dict] = []
     async with OpenAlexClient(s) as client:
-        for i in range(0, len(orcids), _BATCH):
-            f = "orcid:" + "|".join(orcids[i : i + _BATCH])
+        for i in range(0, len(values), _BATCH):
+            f = f"{key}:" + "|".join(values[i : i + _BATCH])
             out += [
                 a async for a in client.paginate("authors", filter=f, select=DEFAULT_AUTHOR_SELECT)
             ]
@@ -61,14 +69,52 @@ async def _fetch_works(author_ids: list[str], s: Settings) -> list[dict]:
     return out
 
 
-def fetch_extra_authors(settings: Settings | None = None) -> pl.DataFrame:
-    """Fetch all OpenAlex authors carrying a roster ORCID; write the curated frame."""
-    s = settings or get_settings()
-    orcids = sorted(set(load_members()["orcid"].drop_nulls().to_list()))
-    raw = asyncio.run(_fetch_by_orcid(orcids, s))
-    frame = transform.authors_to_frame(raw, settings=s, apply_year_filter=False)
+def _write_extra(raw: list[dict], s: Settings) -> pl.DataFrame:
+    frame = transform.authors_to_frame(raw, settings=s, apply_year_filter=False).unique("author_id")
     storage.write_polars(frame, "openalex", "authors", "extra", "authors.parquet", settings=s)
     return frame
+
+
+def build_evidence(
+    members: pl.DataFrame, through_fy: int | None = None, settings: Settings | None = None
+) -> pl.DataFrame | None:
+    """Derive and persist vetted-evidence links; None when there's no vetted sheet.
+
+    ``through_fy`` limits the evidence to report years <= it (for held-out
+    evaluation). Requires the ORCID authors to be written first (they reserve
+    their profiles for their members).
+    """
+    xlsx = latest_vetted_xlsx()
+    if not xlsx:
+        return None
+    pairs = vetted_pairs(xlsx)
+    if through_fy is not None:
+        pairs = pairs.filter(pl.col("fy") <= through_fy)
+    authorships = fetch_authorships(pairs["pmid"].unique().to_list(), settings)
+    links = evidence_links(pairs, members, authorships, reserved=orcid_author_links(members))
+    links.write_parquet(cc_target("member_evidence_links"))
+    return links
+
+
+def fetch_extra_authors(
+    through_fy: int | None = None, settings: Settings | None = None
+) -> pl.DataFrame:
+    """Fetch every author carrying a roster ORCID or tied to a member by vetted
+    evidence; write the curated frame."""
+    s = settings or get_settings()
+    members = load_members()
+    orcids = sorted(set(members["orcid"].drop_nulls().to_list()))
+    raw = asyncio.run(_fetch_authors("orcid", orcids, s))
+    _write_extra(raw, s)  # written first: ORCID profiles are reserved in the evidence step
+    links = build_evidence(members, through_fy, s)
+    if links is not None:
+        print(
+            f"  vetted-evidence links: {links.height} for {links['Member_ID'].n_unique()} members"
+        )
+        have = {transform.short_id(a["id"]) for a in raw}
+        new_ids = sorted(set(links["author_id"]) - have)
+        raw += asyncio.run(_fetch_authors("openalex", new_ids, s))
+    return _write_extra(raw, s)
 
 
 def backfill_works(author_ids: list[str], settings: Settings | None = None) -> int:
@@ -108,16 +154,28 @@ def backfill_works(author_ids: list[str], settings: Settings | None = None) -> i
 
 
 def main() -> None:
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--evidence-through-fy",
+        type=int,
+        default=None,
+        help="Use only vetted papers with report year <= this (held-out evaluation).",
+    )
+    args = parser.parse_args()
     s = get_settings()
-    extra = fetch_extra_authors(s)
-    print(f"  authors with a roster ORCID: {extra.height}")
+    extra = fetch_extra_authors(args.evidence_through_fy, s)
+    print(f"  extra authors (ORCID + vetted evidence): {extra.height}")
 
     con = storage.duckdb_connect(s)
     try:
         state.init_schema(con)
         qualifying = set(state.qualifying_author_ids(con, s.year_cutoff()))
-        # Authors the snapshot scan already targets have their works captured.
-        todo = sorted(set(extra["author_id"]) - qualifying)
+        # Authors the snapshot scan already targets have their works captured;
+        # conflated profiles (over even the ORCID cap) are never attributed.
+        plausible = extra.filter(pl.col("works_count") <= MAX_PLAUSIBLE_WORKS_ORCID)
+        todo = sorted(set(plausible["author_id"]) - qualifying)
         print(f"  backfilling works for {len(todo)} authors outside the scan target")
         print(f"  raw works written: {backfill_works(todo, s)}")
         state.set_target_authors(con, sorted(qualifying | set(extra["author_id"])))

@@ -26,15 +26,18 @@ def latest_vetted_xlsx() -> str | None:
 
 
 def vetted_pairs(xlsx: str) -> pl.DataFrame:
-    """Distinct ``(pmid, member_id)`` pairs from the sheet.
+    """Distinct ``(pmid, member_id, fy)`` pairs from the sheet (``fy`` = ReportYr).
 
     ``Member(s)`` holds tokens like ``Harris-2224`` separated by ``,`` or ``;``;
     the trailing number is the roster Member_ID.
     """
-    df = pl.read_excel(xlsx, read_options={"header_row": 2}, columns=["PMID", "Member(s)"])
+    df = pl.read_excel(
+        xlsx, read_options={"header_row": 2}, columns=["PMID", "ReportYr", "Member(s)"]
+    )
     return (
         df.select(
             pmid=pl.col("PMID").cast(pl.Utf8),
+            fy=pl.col("ReportYr").cast(pl.Int64),
             member_id=pl.col("Member(s)").str.extract_all(r"-\s*(\d{3,4})\b"),
         )
         .explode("member_id")

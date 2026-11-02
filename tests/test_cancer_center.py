@@ -206,7 +206,9 @@ def test_author_program_map_keeps_orcid_split_profiles():
     )
     # Member 1's ORCID is also on A2 (split profile); member 2 isn't ORCID-matched,
     # so a link for it must not add attribution.
-    links = pl.DataFrame({"Member_ID": [1, 1, 2], "author_id": ["A1", "A2", "A8"]})
+    links = pl.DataFrame(
+        {"Member_ID": [1, 1, 2], "author_id": ["A1", "A2", "A8"], "method": ["orcid"] * 3}
+    )
     amap = _author_program_map(crosswalk, links)
     assert sorted(amap["author_id"]) == ["A1", "A2", "A9"]
     assert amap.filter(pl.col("author_id") == "A2")["member_id"].item() == 1
@@ -242,3 +244,49 @@ def test_candidates_reserve_orcid_authors_for_their_member():
     c = _candidates(members, names)
     assert c.filter(pl.col("Member_ID") == 1)["author_id"].to_list() == ["A1"]
     assert c.filter(pl.col("Member_ID") == 2)["author_id"].to_list() == ["A2"]
+
+
+def test_name_fits_handles_initials_hyphens_and_apostrophes():
+    from cu_openalex.cancer_center.evidence import name_fits
+
+    assert name_fits("alessandro", "a", "Angelo D’Alessandro")
+    assert name_fits("mulcahy-levy", "j", "Jean M. Mulcahy Levy")
+    assert name_fits("eckhardt", "s", "S. Gail Eckhardt")
+    assert not name_fits("smith", "j", "Mary Smith")  # wrong initial
+    assert not name_fits("smith", "j", "John Smithson")  # surname must be a token
+    assert not name_fits("smith", "j", None)
+
+
+def test_evidence_links_rules():
+    """Support >= 2, ambiguous authorships skipped, ORCID-reserved authors kept."""
+    import polars as pl
+
+    from cu_openalex.cancer_center.evidence import evidence_links
+
+    members = pl.DataFrame(
+        {
+            "Member_ID": [1, 2, 3],
+            "last_norm": ["kim", "kim", "lee"],
+            "first_initial": ["s", "s", "j"],
+        }
+    )
+    pairs = pl.DataFrame(
+        {
+            "pmid": ["p1", "p2", "p3", "p3", "p4", "p5"],
+            "member_id": [1, 1, 1, 2, 3, 3],
+        }
+    )
+    authorships = pl.DataFrame(
+        {
+            "pmid": ["p1", "p2", "p3", "p4", "p5"],
+            "author_id": ["A1", "A1", "A1", "A3", "A3"],
+            "author_name": ["Sun Kim", "S. Kim", "Sun Kim", "Jo Lee", "J Lee"],
+        }
+    )
+    # p3 names both Kim members -> ambiguous, skipped; A1 still has p1+p2 for member 1.
+    links = evidence_links(pairs, members, authorships)
+    assert links.select("Member_ID", "author_id", "support").rows() == [(1, "A1", 2), (3, "A3", 2)]
+    # A3 carries member 99's ORCID -> member 3 can't claim it.
+    reserved = pl.DataFrame({"Member_ID": [99], "author_id": ["A3"]})
+    links = evidence_links(pairs, members, authorships, reserved)
+    assert links["author_id"].to_list() == ["A1"]
