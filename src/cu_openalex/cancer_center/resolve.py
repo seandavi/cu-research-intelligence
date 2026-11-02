@@ -133,8 +133,16 @@ def _candidates(members: pl.DataFrame, names: pl.DataFrame) -> pl.DataFrame:
     )
 
     # --- Name candidates: exact last + (exact first OR first initial) ---
+    # An author carrying a roster member's ORCID is that member's (their ORCID
+    # pair outranks any name pair); never offer it to a namesake.
+    roster_orcids = m["m_orcid"].drop_nulls().implode()
     name_pairs = (
-        m.join(names, left_on="last_norm", right_on="last_tok", how="inner")
+        m.join(
+            names.filter(~pl.col("orcid").is_in(roster_orcids).fill_null(False)),
+            left_on="last_norm",
+            right_on="last_tok",
+            how="inner",
+        )
         .with_columns(
             (pl.col("first_norm") == pl.col("first_tok")).alias("first_exact"),
             (pl.col("first_initial") == pl.col("first_init")).alias("init_match"),

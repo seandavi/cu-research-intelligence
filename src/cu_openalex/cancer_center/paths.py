@@ -11,7 +11,7 @@ from ..storage import local_data_root, parquet_target
 MEMBERS_XLSX = Path("data/external/Members-AllEver-withIDs_11.15.24.xlsx")
 
 # The Research Team's vetted publication list (gitignored, date-stamped names
-# like PubsthruFY26_11.2.26.xlsx; the newest is used). Optional.
+# like PubsthruFY26_11.2.26.xlsx; the most recently modified is used). Optional.
 VETTED_XLSX_GLOB = "data/external/Pubsthru*.xlsx"
 
 # Curated cancer-center datasets, relative to the storage landing pad.

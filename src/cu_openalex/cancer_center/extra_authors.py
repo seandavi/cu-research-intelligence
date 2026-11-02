@@ -20,6 +20,7 @@ Run: ``python -m cu_openalex.cancer_center.extra_authors``.
 from __future__ import annotations
 
 import asyncio
+import datetime as dt
 import json
 from itertools import groupby
 
@@ -33,6 +34,10 @@ from .members import load_members
 
 # OpenAlex caps OR-filters at 100 values; stay well under.
 _BATCH = 50
+# Raw files are append-only, one stem per run (like a snapshot part): a rerun
+# must never overwrite an earlier capture, or a work dropped from this run's
+# author set (e.g. its author now qualifies for the snapshot scan, which skips
+# pre-watermark history) would vanish from the raw layer.
 _RAW_STEM = "api_extra_authors"
 
 
@@ -70,19 +75,23 @@ def backfill_works(author_ids: list[str], settings: Settings | None = None) -> i
     """Write the authors' works verbatim into the raw works layer; return the count."""
     s = settings or get_settings()
     works = asyncio.run(_fetch_works(author_ids, s))
+    # The Hive partition value overrides the column on read, so it must be a date:
+    # a work without updated_date is filed under today rather than "unknown".
+    today = dt.date.today().isoformat()
+    run = dt.datetime.now().strftime("%Y%m%dT%H%M%S")
     rows = sorted(
         (
             {
                 "work_id": transform.short_id(w["id"]),
-                "updated_date": w.get("updated_date"),
+                "updated_date": w.get("updated_date") or today,
                 "raw_json": json.dumps(w, separators=(",", ":")),
             }
             for w in works
         ),
-        key=lambda r: (r["updated_date"] or "")[:10],
+        key=lambda r: r["updated_date"][:10],
     )
     # Same layout as the snapshot scan: raw/works/updated_date=<day>/<stem>.parquet.
-    for day, group in groupby(rows, key=lambda r: (r["updated_date"] or "")[:10]):
+    for day, group in groupby(rows, key=lambda r: r["updated_date"][:10]):
         storage.write_polars(
             pl.DataFrame(
                 list(group),
@@ -91,8 +100,8 @@ def backfill_works(author_ids: list[str], settings: Settings | None = None) -> i
             "openalex",
             "raw",
             "works",
-            f"updated_date={day or 'unknown'}",
-            f"{_RAW_STEM}.parquet",
+            f"updated_date={day}",
+            f"{_RAW_STEM}_{run}.parquet",
             settings=s,
         )
     return len(rows)

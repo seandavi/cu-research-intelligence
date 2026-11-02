@@ -9,6 +9,7 @@ out, not averaged away.
 from __future__ import annotations
 
 import glob
+import os
 
 import polars as pl
 
@@ -19,8 +20,9 @@ SUSPECT_RECALL = 0.5
 
 
 def latest_vetted_xlsx() -> str | None:
-    files = sorted(glob.glob(VETTED_XLSX_GLOB))
-    return files[-1] if files else None
+    # Newest by mtime: the date stamps (11.2.26) don't sort lexically.
+    files = glob.glob(VETTED_XLSX_GLOB)
+    return max(files, key=os.path.getmtime) if files else None
 
 
 def vetted_pairs(xlsx: str) -> pl.DataFrame:

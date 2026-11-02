@@ -210,3 +210,35 @@ def test_author_program_map_keeps_orcid_split_profiles():
     amap = _author_program_map(crosswalk, links)
     assert sorted(amap["author_id"]) == ["A1", "A2", "A9"]
     assert amap.filter(pl.col("author_id") == "A2")["member_id"].item() == 1
+
+
+def test_candidates_reserve_orcid_authors_for_their_member():
+    """A namesake can't be name-matched to an author carrying another member's ORCID."""
+    import polars as pl
+
+    from cu_openalex.cancer_center.resolve import _candidates
+
+    members = pl.DataFrame(
+        {
+            "Member_ID": [1, 2],
+            "orcid": [None, "O2"],
+            "last_norm": ["smith", "jones"],
+            "first_norm": ["john", "jane"],
+            "first_initial": ["j", "j"],
+        }
+    )
+    names = pl.DataFrame(
+        {
+            "author_id": ["A1", "A2"],
+            "orcid": [None, "O2"],
+            "is_current_cu": [False, False],
+            "works_count": [10, 100],
+            "is_display": [True, True],
+            "last_tok": ["smith", "smith"],
+            "first_tok": ["john", "john"],
+            "first_init": ["j", "j"],
+        }
+    )
+    c = _candidates(members, names)
+    assert c.filter(pl.col("Member_ID") == 1)["author_id"].to_list() == ["A1"]
+    assert c.filter(pl.col("Member_ID") == 2)["author_id"].to_list() == ["A2"]
