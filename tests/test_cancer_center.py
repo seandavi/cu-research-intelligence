@@ -25,6 +25,8 @@ def test_parse_orcid_variants():
     assert parse_orcid("Orcid: 0000-0003-1271-3465") == "0000-0003-1271-3465"
     assert parse_orcid("https://orcid.org/0000-0002-1825-0097") == "0000-0002-1825-0097"
     assert parse_orcid("0000-0001-2345-678X") == "0000-0001-2345-678X"
+    # Lowercase checksum (seen on the roster) normalizes to OpenAlex's upper case.
+    assert parse_orcid("Orcid: 0000-0003-2365-582x") == "0000-0003-2365-582X"
     assert parse_orcid("") is None
     assert parse_orcid(None) is None
     assert parse_orcid("no id here") is None
@@ -183,3 +185,60 @@ def test_latest_raw_sql_keeps_one_capture_per_work(tmp_path):
         ("W1", '{"abstract_inverted_index": {"new": [0]}}'),
         ("W2", '{"abstract_inverted_index": {"only": [0]}}'),
     ]
+
+
+def test_author_program_map_keeps_orcid_split_profiles():
+    """Every author_id carrying an ORCID-matched member's ORCID is attributed (#55)."""
+    import polars as pl
+
+    from cu_openalex.cancer_center.build import _author_program_map
+
+    crosswalk = pl.DataFrame(
+        {
+            "Member_ID": [1, 2],
+            "author_id": ["A1", "A9"],
+            "method": ["orcid", "name_exact_cu"],
+            "confidence": ["high", "medium"],
+            "PrimaryProgram": ["MCO", "DT"],
+            "is_real_program": [True, True],
+            "is_active": [True, True],
+        }
+    )
+    # Member 1's ORCID is also on A2 (split profile); member 2 isn't ORCID-matched,
+    # so a link for it must not add attribution.
+    links = pl.DataFrame({"Member_ID": [1, 1, 2], "author_id": ["A1", "A2", "A8"]})
+    amap = _author_program_map(crosswalk, links)
+    assert sorted(amap["author_id"]) == ["A1", "A2", "A9"]
+    assert amap.filter(pl.col("author_id") == "A2")["member_id"].item() == 1
+
+
+def test_candidates_reserve_orcid_authors_for_their_member():
+    """A namesake can't be name-matched to an author carrying another member's ORCID."""
+    import polars as pl
+
+    from cu_openalex.cancer_center.resolve import _candidates
+
+    members = pl.DataFrame(
+        {
+            "Member_ID": [1, 2],
+            "orcid": [None, "O2"],
+            "last_norm": ["smith", "jones"],
+            "first_norm": ["john", "jane"],
+            "first_initial": ["j", "j"],
+        }
+    )
+    names = pl.DataFrame(
+        {
+            "author_id": ["A1", "A2"],
+            "orcid": [None, "O2"],
+            "is_current_cu": [False, False],
+            "works_count": [10, 100],
+            "is_display": [True, True],
+            "last_tok": ["smith", "smith"],
+            "first_tok": ["john", "john"],
+            "first_init": ["j", "j"],
+        }
+    )
+    c = _candidates(members, names)
+    assert c.filter(pl.col("Member_ID") == 1)["author_id"].to_list() == ["A1"]
+    assert c.filter(pl.col("Member_ID") == 2)["author_id"].to_list() == ["A2"]

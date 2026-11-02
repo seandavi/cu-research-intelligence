@@ -30,7 +30,7 @@ from .programs import (
     home_institutions_sql,
     publication_types_sql,
 )
-from .resolve import build_crosswalk
+from .resolve import authors_sql, build_crosswalk, orcid_author_links
 
 _WORKS_GLOB = "data/openalex/works/**/*.parquet"
 _RAW_WORKS_GLOB = "data/openalex/raw/works/**/*.parquet"
@@ -46,24 +46,38 @@ def _latest_raw_sql(raw_glob: str, ids_table: str = "cc_workids") -> str:
     """
 
 
-_AUTHORS_GLOB = "data/openalex/authors/current/authors.parquet"
 _INSTITUTIONS_GLOB = "data/openalex/dimensions/institutions/*.parquet"
 
 # OpenAlex author disambiguation occasionally conflates many distinct people
 # (esp. common names) into one author_id with an impossible works_count. No real
 # biomedical investigator has this many indexed works; such IDs are excluded from
 # attribution so they don't flood the collaboration metrics. See ADR / README.
+# ORCID-verified authors get a higher cap: a prolific investigator is real (#55;
+# D'Alessandro has ~2,050), but conflated profiles can carry an ORCID too (the
+# 40k-work "Rui Zhao"). ponytail: flat caps; filter a conflated profile's works by
+# consortium affiliation if a real member ever needs one.
 MAX_PLAUSIBLE_WORKS = 2000
+MAX_PLAUSIBLE_WORKS_ORCID = 5000
 
 
-def _author_program_map(crosswalk: pl.DataFrame) -> pl.DataFrame:
-    """One row per resolved author_id -> (member_id, program, confidence).
+def _author_program_map(
+    crosswalk: pl.DataFrame, orcid_links: pl.DataFrame | None = None
+) -> pl.DataFrame:
+    """One row per resolved author_id -> (member_id, program, confidence, method).
 
-    If two members resolve to the same author_id (name collision), keep the
-    highest-confidence, then most-recent member to avoid double-counting.
+    ``orcid_links`` adds every other author_id carrying an ORCID-matched member's
+    ORCID (OpenAlex split profiles), with that member's attributes. If two members
+    resolve to the same author_id (name collision), keep the highest-confidence,
+    then most-recent member to avoid double-counting.
     """
     conf_rank = {"high": 3, "medium": 2, "low": 1}
-    resolved = crosswalk.filter(pl.col("author_id").is_not_null()).with_columns(
+    resolved = crosswalk.filter(pl.col("author_id").is_not_null())
+    if orcid_links is not None and orcid_links.height:
+        split = orcid_links.join(
+            resolved.filter(pl.col("method") == "orcid").drop("author_id"), on="Member_ID"
+        ).select(resolved.columns)
+        resolved = pl.concat([resolved, split]).unique(subset=["Member_ID", "author_id"])
+    resolved = resolved.with_columns(
         pl.col("confidence")
         .replace_strict(conf_rank, default=0, return_dtype=pl.Int64)
         .alias("crank")
@@ -78,6 +92,7 @@ def _author_program_map(crosswalk: pl.DataFrame) -> pl.DataFrame:
             "confidence",
             "is_real_program",
             "is_active",
+            "method",
         )
     )
 
@@ -175,10 +190,11 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
     ("low" keeps everything; "high" restricts to ORCID/exact-CU-name matches).
     Returns a map of table name -> written path.
     """
-    crosswalk = build_crosswalk(load_members())
+    members = load_members()
+    crosswalk = build_crosswalk(members)
     rank = {"high": 3, "medium": 2, "low": 1}
     floor = rank[min_confidence]
-    amap = _author_program_map(crosswalk).filter(
+    amap = _author_program_map(crosswalk, orcid_author_links(members)).filter(
         pl.col("confidence").replace_strict(rank, default=0, return_dtype=pl.Int64) >= floor
     )
 
@@ -191,19 +207,22 @@ def build_cancer_center_tables(*, min_confidence: str = "low") -> dict[str, str]
         con.execute(
             f"""
             CREATE TABLE author_program AS
-            SELECT amap.* FROM amap
-            JOIN '{_AUTHORS_GLOB}' a USING (author_id)
+            SELECT amap.* EXCLUDE (method) FROM amap
+            JOIN {authors_sql()} a USING (author_id)
             WHERE a.works_count <= {MAX_PLAUSIBLE_WORKS}
+               OR (amap.method = 'orcid' AND a.works_count <= {MAX_PLAUSIBLE_WORKS_ORCID})
             """
         )
         n_dropped = con.sql(
-            f"""SELECT count(*) FROM amap JOIN '{_AUTHORS_GLOB}' a USING (author_id)
-                WHERE a.works_count > {MAX_PLAUSIBLE_WORKS}"""
+            f"""SELECT count(*) FROM amap JOIN {authors_sql()} a USING (author_id)
+                WHERE a.works_count > CASE amap.method WHEN 'orcid'
+                      THEN {MAX_PLAUSIBLE_WORKS_ORCID} ELSE {MAX_PLAUSIBLE_WORKS} END"""
         ).fetchone()[0]
         if n_dropped:
             print(
                 f"Excluded {n_dropped} conflated author_id(s) "
-                f"(works_count > {MAX_PLAUSIBLE_WORKS})."
+                f"(works_count > {MAX_PLAUSIBLE_WORKS}, ORCID-verified > "
+                f"{MAX_PLAUSIBLE_WORKS_ORCID})."
             )
 
         # work x cc-author bridge: explode work author lists, keep cc authors.
@@ -405,6 +424,10 @@ def main() -> None:
     paths = build_cancer_center_tables(min_confidence=args.min_confidence)
     for name, path in paths.items():
         print(f"  {name:14} -> {path}")
+    # Resolution check against the Research Team's vetted list, when present (#55).
+    from .vetted import report
+
+    report()
     # Derived marts the serving DB always carries: cancer-relevance labels (ADR-0027
     # stage 1) and the strategic-focus bridge (#38). Built even with --no-bake so a
     # later standalone bake picks them up.

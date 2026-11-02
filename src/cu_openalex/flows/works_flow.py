@@ -52,6 +52,8 @@ def works_flow(
     try:
         state.init_schema(con)
         author_ids = state.qualifying_author_ids(con, s.year_cutoff(run_date))
+        # Plus cancer-center members found by ORCID at partner institutions (#55).
+        author_ids = sorted(set(author_ids) | set(state.extra_author_ids(s)))
         if new_author_count is None:
             new_author_count = state.count_new_authors(con, run_date)
         if not author_ids:

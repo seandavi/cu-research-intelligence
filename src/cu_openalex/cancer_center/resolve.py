@@ -21,13 +21,33 @@ materially raises recall for hyphenated / maiden / transliterated names.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import polars as pl
 
 from ..storage import duckdb_connect
 from .members import load_members, normalize_name
 
-# Curated authors table, read relative to the storage landing pad.
-_AUTHORS_GLOB = "data/openalex/authors/current/authors.parquet"
+# Curated authors tables, read relative to the storage landing pad: the
+# institution pull, plus members found by ORCID elsewhere (``extra_authors``, #55).
+_AUTHORS_CURRENT = "data/openalex/authors/current/authors.parquet"
+_AUTHORS_EXTRA = "data/openalex/authors/extra/authors.parquet"
+
+
+def authors_sql() -> str:
+    """SQL relation over every curated author, one row per ``author_id``.
+
+    An author in both tables keeps its institution-pull row (``current`` sorts
+    before ``extra``), so ``is_current_cu`` and the year window stay as computed
+    there.
+    """
+    srcs = [p for p in (_AUTHORS_CURRENT, _AUTHORS_EXTRA) if Path(p).exists()]
+    return f"""(
+        SELECT * EXCLUDE (filename)
+        FROM read_parquet({srcs}, filename = true, union_by_name = true)
+        QUALIFY row_number() OVER (PARTITION BY author_id ORDER BY filename) = 1
+    )"""
+
 
 # Score per tier; higher wins. ORCID dominates everything.
 _TIER_SCORE = {
@@ -61,7 +81,7 @@ def _author_name_keys(con) -> pl.DataFrame:
         WITH a AS (
             SELECT author_id, orcid, display_name, is_current_cu, works_count,
                    COALESCE(name_alternatives, []) AS alts
-            FROM '{_AUTHORS_GLOB}'
+            FROM {authors_sql()}
         ),
         names AS (
             SELECT author_id, orcid, is_current_cu, works_count,
@@ -113,8 +133,16 @@ def _candidates(members: pl.DataFrame, names: pl.DataFrame) -> pl.DataFrame:
     )
 
     # --- Name candidates: exact last + (exact first OR first initial) ---
+    # An author carrying a roster member's ORCID is that member's (their ORCID
+    # pair outranks any name pair); never offer it to a namesake.
+    roster_orcids = m["m_orcid"].drop_nulls().implode()
     name_pairs = (
-        m.join(names, left_on="last_norm", right_on="last_tok", how="inner")
+        m.join(
+            names.filter(~pl.col("orcid").is_in(roster_orcids).fill_null(False)),
+            left_on="last_norm",
+            right_on="last_tok",
+            how="inner",
+        )
         .with_columns(
             (pl.col("first_norm") == pl.col("first_tok")).alias("first_exact"),
             (pl.col("first_initial") == pl.col("first_init")).alias("init_match"),
@@ -200,3 +228,21 @@ def build_crosswalk(members: pl.DataFrame | None = None) -> pl.DataFrame:
         .alias("confidence"),
     )
     return out.drop("n_top")
+
+
+def orcid_author_links(members: pl.DataFrame) -> pl.DataFrame:
+    """Every ``(Member_ID, author_id)`` whose author carries the member's ORCID.
+
+    OpenAlex splits some people across several author IDs; ``build_crosswalk``
+    picks one, but attribution must use them all (D'Alessandro's ORCID is on two).
+    """
+    with duckdb_connect(database=":memory:") as con:
+        authors = con.sql(
+            f"SELECT author_id, orcid FROM {authors_sql()} WHERE orcid IS NOT NULL"
+        ).pl()
+    return (
+        members.select("Member_ID", "orcid")
+        .filter(pl.col("orcid").is_not_null())
+        .join(authors, on="orcid")
+        .select("Member_ID", "author_id")
+    )
