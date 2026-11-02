@@ -66,7 +66,9 @@ def _tokens(name: str) -> list[str]:
 def name_fits(last_norm: str, first_initial: str, author_name: str | None) -> bool:
     """Every surname token appears in the author's name, and another token
     starts with the member's first initial (allows middle names, initials,
-    hyphenated and maiden names)."""
+    hyphenated and maiden names). Lenient on purpose — a middle name can supply
+    the initial ("Mary Jane Smith" fits J. Smith); ``MIN_SUPPORT`` and the
+    per-paper ambiguity checks carry the precision."""
     if not author_name or not last_norm or not first_initial:
         return False
     toks = _tokens(author_name)
@@ -90,6 +92,7 @@ def evidence_links(
     which no other member may claim.
     """
     m = members.select("Member_ID", "last_norm", "first_initial")
+    pairs = pairs.select("pmid", "member_id").unique()
     cand = (
         pairs.join(m, left_on="member_id", right_on="Member_ID")
         .join(authorships, on="pmid")
@@ -118,8 +121,15 @@ def evidence_links(
         .join(n_vetted, on="member_id")
     )
     # An author fitting two members (namesakes both with vetted papers): the one
-    # with more support keeps it.
-    links = links.sort("support", descending=True).unique(subset=["author_id"], keep="first")
+    # with more support keeps it; a tie is ambiguous and nobody gets it.
+    top = links.group_by("author_id").agg(
+        best=pl.col("support").max(), n_best=(pl.col("support") == pl.col("support").max()).sum()
+    )
+    links = (
+        links.join(top, on="author_id")
+        .filter((pl.col("support") == pl.col("best")) & (pl.col("n_best") == 1))
+        .drop("best", "n_best")
+    )
     return links.rename({"member_id": "Member_ID"}).sort(
         "Member_ID", "support", descending=[False, True]
     )

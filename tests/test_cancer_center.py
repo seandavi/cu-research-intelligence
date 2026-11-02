@@ -290,3 +290,49 @@ def test_evidence_links_rules():
     reserved = pl.DataFrame({"Member_ID": [99], "author_id": ["A3"]})
     links = evidence_links(pairs, members, authorships, reserved)
     assert links["author_id"].to_list() == ["A1"]
+
+
+def test_evidence_links_ties_and_duplicate_rows():
+    """Equal-support namesakes get nobody; repeated sheet rows aren't ambiguity."""
+    import polars as pl
+
+    from cu_openalex.cancer_center.evidence import evidence_links
+
+    members = pl.DataFrame(
+        {"Member_ID": [1, 2], "last_norm": ["kim", "kim"], "first_initial": ["s", "s"]}
+    )
+    authorships = pl.DataFrame(
+        {"pmid": ["p1", "p2", "p3", "p4"], "author_id": ["A1"] * 4, "author_name": ["Sun Kim"] * 4}
+    )
+    tie = pl.DataFrame({"pmid": ["p1", "p2", "p3", "p4"], "member_id": [1, 1, 2, 2]})
+    assert evidence_links(tie, members, authorships).height == 0
+    dup = pl.DataFrame(
+        {"pmid": ["p1", "p1", "p2", "p2"], "member_id": [1] * 4, "fy": [2024, 2025] * 2}
+    )
+    assert evidence_links(dup, members, authorships)["author_id"].to_list() == ["A1"]
+
+
+def test_extra_authors_keep_persisted_evidence_without_sheet(monkeypatch):
+    """A refresh without the vetted sheet still fetches the persisted evidence authors."""
+    import polars as pl
+
+    from cu_openalex.cancer_center import extra_authors as ea
+
+    calls = []
+
+    async def fake_fetch(key, values, s):
+        calls.append((key, list(values)))
+        return [{"id": f"https://openalex.org/{v}"} for v in values] if key == "openalex" else []
+
+    monkeypatch.setattr(
+        ea, "load_members", lambda: pl.DataFrame({"orcid": [None]}, schema={"orcid": pl.Utf8})
+    )
+    monkeypatch.setattr(ea, "_fetch_authors", fake_fetch)
+    monkeypatch.setattr(ea, "_write_extra", lambda raw, s: raw)
+    monkeypatch.setattr(ea, "latest_vetted_xlsx", lambda: None)
+    monkeypatch.setattr(
+        ea, "load_evidence_links", lambda: pl.DataFrame({"Member_ID": [7], "author_id": ["A9"]})
+    )
+    out = ea.fetch_extra_authors(settings=object())
+    assert ("openalex", ["A9"]) in calls
+    assert [a["id"] for a in out] == ["https://openalex.org/A9"]

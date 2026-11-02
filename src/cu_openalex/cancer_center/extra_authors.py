@@ -36,7 +36,7 @@ from .build import MAX_PLAUSIBLE_WORKS_ORCID
 from .evidence import evidence_links, fetch_authorships
 from .members import load_members
 from .paths import cc_target
-from .resolve import orcid_author_links
+from .resolve import load_evidence_links, orcid_author_links
 from .vetted import latest_vetted_xlsx, vetted_pairs
 
 # OpenAlex caps OR-filters at 100 values; stay well under.
@@ -107,7 +107,9 @@ def fetch_extra_authors(
     raw = asyncio.run(_fetch_authors("orcid", orcids, s))
     _write_extra(raw, s)  # written first: ORCID profiles are reserved in the evidence step
     links = build_evidence(members, through_fy, s)
-    if links is not None:
+    if links is None:  # no vetted sheet here: keep the last persisted links
+        links = load_evidence_links()
+    if links.height:
         print(
             f"  vetted-evidence links: {links.height} for {links['Member_ID'].n_unique()} members"
         )
