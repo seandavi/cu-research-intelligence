@@ -11,18 +11,20 @@ cd "$(dirname "$0")/.."
 
 log() { echo "[refresh $(date '+%F %T')] $*"; }
 
-log "1/6 OpenAlex pipeline (authors + works; incremental from the works watermark)"
+log "1/7 OpenAlex pipeline (authors + works; incremental from the works watermark)"
 uv run python -m cu_openalex.flows.pipeline
-log "2/6 OpenAlex dimensions (institutions/sources/funders/topics)"
+log "2/7 consortium members by ORCID (any institution) + API backfill of their works"
+uv run python -m cu_openalex.cancer_center.extra_authors
+log "3/7 OpenAlex dimensions (institutions/sources/funders/topics)"
 uv run python -m cu_openalex.flows.dimensions_flow
-log "3/6 NIH RePORTER grants mart (from cdsci-lake)"
+log "4/7 NIH RePORTER grants mart (from cdsci-lake)"
 uv run --extra lake python -m cu_openalex.cancer_center.reporter
-log "4/6 cancer-center marts (iCite enrichment from cdsci-lake)"
+log "5/7 cancer-center marts (iCite enrichment from cdsci-lake)"
 uv run --extra lake python -m cu_openalex.cancer_center.build --no-bake
-log "5/6 membership spine + bake serving.duckdb (freshness stamps included)"
+log "6/7 membership spine + bake serving.duckdb (freshness stamps included)"
 uv run --extra lake python -m cu_openalex.cancer_center.membership --no-bake
 uv run --extra lake python -m cu_openalex.cancer_center.bake
-log "6/6 rebuild + redeploy the API image"
+log "7/7 rebuild + redeploy the API image"
 docker compose up -d --build api
 
 # Verify the deployed API is serving the DB we just baked.

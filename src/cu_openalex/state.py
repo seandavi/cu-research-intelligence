@@ -174,6 +174,21 @@ def qualifying_author_ids(con: duckdb.DuckDBPyConnection, cutoff: int) -> list[s
     ]
 
 
+def extra_author_ids(settings: Settings | None = None) -> list[str]:
+    """Author ids outside the institution pull that the cancer center tracks.
+
+    Written by ``cancer_center.extra_authors`` (members found by ORCID at partner
+    institutions). The works scan adds them to its target set so incremental
+    snapshot runs keep their works current. Empty when the file doesn't exist.
+    """
+    if not storage.dataset_has_files("openalex", "authors", "extra", settings=settings):
+        return []
+    path = storage.parquet_target(
+        "openalex", "authors", "extra", "authors.parquet", settings=settings
+    )
+    return pl.read_parquet(path, columns=["author_id"])["author_id"].drop_nulls().to_list()
+
+
 def count_new_authors(con: duckdb.DuckDBPyConnection, run_date: _dt.date) -> int:
     """How many authors were first seen on ``run_date`` (for the backfill warning)."""
     return int(

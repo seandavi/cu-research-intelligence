@@ -58,6 +58,18 @@ computed from the programs of its *member* co-authors only.
 names) into one `author_id` with an impossible `works_count`. IDs with
 `works_count > 2000` are excluded from attribution (one in this roster — a "Rui
 Zhao" ID with 40,099 works that alone produced a spurious 2020–2021 spike).
+ORCID-verified authors get a higher cap of 5,000 (#55): real prolific
+investigators exist (D'Alessandro, ~2,050 works), but the conflated "Rui Zhao"
+ID carries an ORCID too, so a full exemption would let it back in.
+
+**Consortium members found by ORCID** (amended 2026-11, #55): UCCC is a
+consortium center, and members at CSU, CU Boulder, NJH, Denver Health, … often
+never appear in the Anschutz-filtered author pull. `extra_authors.py` looks up
+every roster ORCID in OpenAlex (any institution), keeps **every** author_id
+carrying it (OpenAlex splits people across IDs; all are attributed), backfills
+their works via the API into the raw layer, and adds them to the works scan's
+target set. Checked against the Research Team's vetted list (`vetted.py`, run
+by the build), recall of vetted (PMID, member) pairs rose from 81.4% to 87.7%.
 
 **Document-type filter** (critical): a 2023 OpenAlex bulk-index event injected
 thousands of AACR *supplementary-materials* and *preprint* records (titles like

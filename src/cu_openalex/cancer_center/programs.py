@@ -45,9 +45,9 @@ def current_programs_sql() -> str:
     return "(" + ", ".join("'" + p.replace("'", "''") + "'" for p in CURRENT_PROGRAMS) + ")"
 
 
-# The center's "home" institutions (the Anschutz Medical Campus complex). A
-# publication is *inter-institutional* when it has a co-author affiliated with any
-# institution outside this set. Bare OpenAlex institution ids.
+# The center's "home" institutions: the Anschutz Medical Campus complex plus the
+# consortium partners. A publication is *inter-institutional* when it has a
+# co-author affiliated with any institution outside this set. Bare OpenAlex ids.
 HOME_INSTITUTIONS: frozenset[str] = frozenset(
     {
         "I51713134",  # University of Colorado Anschutz Medical Campus
@@ -55,6 +55,15 @@ HOME_INSTITUTIONS: frozenset[str] = frozenset(
         "I151808059",  # Colorado School of Public Health
         "I4210096275",  # Children's Hospital Colorado
         "I4210134151",  # University of Colorado Cancer Center
+        # Consortium partners where members hold primary appointments (#55):
+        # collaboration among them is internal to the Center, not external.
+        "I92446798",  # Colorado State University
+        "I188538660",  # University of Colorado Boulder
+        "I3019586173",  # National Jewish Health
+        "I2801983979",  # Denver Health Medical Center
+        "I4210148403",  # VA Eastern Colorado Health Care System
+        "I4210087413",  # University of Colorado Health (UCHealth)
+        # ponytail: Kaiser Permanente Colorado has no clean OpenAlex institution.
     }
 )
 

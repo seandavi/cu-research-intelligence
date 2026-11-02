@@ -20,7 +20,7 @@ import polars as pl
 from .paths import MEMBERS_XLSX
 from .programs import NON_PROGRAMS, canonical_program
 
-_ORCID_RE = re.compile(r"(\d{4}-\d{4}-\d{4}-\d{3}[\dX])")
+_ORCID_RE = re.compile(r"(\d{4}-\d{4}-\d{4}-\d{3}[\dX])", re.IGNORECASE)
 
 # Programs that are not real scientific programs — excluded from program-level
 # collaboration analysis but retained in the roster. Sourced from programs.py.
@@ -32,7 +32,8 @@ def parse_orcid(raw: str | None) -> str | None:
     if not raw:
         return None
     m = _ORCID_RE.search(str(raw))
-    return m.group(1) if m else None
+    # The roster has some lowercase "x" checksums; OpenAlex stores them upper-case.
+    return m.group(1).upper() if m else None
 
 
 def _strip_accents(s: str) -> str:

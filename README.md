@@ -164,7 +164,10 @@ Center Support Grant (CCSG / P30) External Advisory Board reviews. See
 **ADR-0013**.
 
 ```bash
-# 1. Build the curated cohort tables (offline, from the works corpus; ~2s)
+# 0. Find members outside the Anschutz pull by ORCID; backfill their works (API)
+uv run python -m cu_openalex.cancer_center.extra_authors
+
+# 1. Build the curated cohort tables (offline, from the works corpus)
 uv run python -m cu_openalex.cancer_center.build
 #    -> data/cancer_center/{members,works,member_works,institutions}.parquet
 
@@ -180,8 +183,8 @@ natural-language interface that turns questions into read-only SQL with Gemini
 (set `GEMINI_API_KEY` on the server; model via `CU_OPENALEX_CHAT_MODEL`).
 
 **Method & caveats** (ADR-0013): members are matched by ORCID + name with a
-recorded confidence tier; ~675/1,115 resolve, so collaboration counts are lower
-bounds. A conflation guard drops OpenAlex `author_id`s with impossible
+recorded confidence tier; ~736/1,115 resolve (members at consortium partners are
+found by ORCID across institutions), so collaboration counts are lower bounds. A conflation guard drops OpenAlex `author_id`s with impossible
 `works_count`. Counts are peer-reviewed articles & reviews — preprints,
 supplementary files, datasets, and **conference abstracts** are excluded.
 Within-year *ratios* (collaboration %, OA %, FWCI, RCR) are more reliable than

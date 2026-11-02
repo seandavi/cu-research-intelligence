@@ -77,7 +77,7 @@ TABLE works  -- one row per work with >=1 member author
   is_inter_program (bool: members from >=2 programs),
   is_intra_program (bool: >=2 members in one program),
   collaboration_class ('solo'/'intra_program'/'inter_program'),
-  has_external_collab (bool: >=1 institution outside the home campus =
+  has_external_collab (bool: >=1 institution outside the Center's consortium =
     inter-institutional), is_international (bool: >=1 non-US institution),
   n_institutions (distinct institutions on the work)
 
@@ -87,7 +87,8 @@ TABLE member_works  -- member x work bridge (one row per member per work)
 
 TABLE institutions  -- work x institution bridge (for inter-institutional)
   work_id, institution_id, institution_name, country_code,
-  is_home (bool: TRUE for the Univ. of Colorado Anschutz complex). Rank external
+  is_home (bool: TRUE for the consortium: the Anschutz complex plus CSU, CU
+  Boulder, National Jewish Health, Denver Health, the VA, UCHealth). Rank external
   collaborators with: SELECT institution_name, count(DISTINCT work_id) FROM
   institutions WHERE NOT is_home GROUP BY 1 ORDER BY 2 DESC.
 
