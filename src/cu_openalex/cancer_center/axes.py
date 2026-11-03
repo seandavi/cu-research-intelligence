@@ -366,3 +366,26 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def axis_summary(spec: str) -> pl.DataFrame:
+    """One readable column per question for ``spec`` (``model:version``), by PMID.
+
+    Yes/no questions give the probability of yes; ``score`` questions the
+    probability-weighted level; ``choice`` questions the top option and its
+    probability (two columns).
+    """
+    model, version = spec.split(":")
+    rows = []
+    for pmid, a in load_cache(model, version).select("pmid", "answers").iter_rows():
+        r: dict = {"pmid": pmid}
+        for qid, ans in json.loads(a).items():
+            if ans["type"] == "noul":
+                r[qid] = round(ans["noul"], 3)
+            elif ans["type"] == "score":
+                r[qid] = round(ans["score"], 2)
+            else:
+                r[qid] = ans["choice"]
+                r[f"{qid}_p"] = round(ans["probabilities"][ans["choice"]], 3)
+        rows.append(r)
+    return pl.DataFrame(rows, infer_schema_length=None)

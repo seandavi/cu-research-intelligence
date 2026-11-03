@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="560" height="440" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<rect width="560" height="440" fill="white"/>
+<text x="280.0" y="22" text-anchor="middle" font-size="14" font-weight="bold">Calibration, chosen model (+both) on test</text>
+<line x1="64.0" y1="376.0" x2="64.0" y2="40.0" stroke="#eee"/>
+<text x="64.0" y="394" text-anchor="middle">0</text>
+<line x1="159.2" y1="376.0" x2="159.2" y2="40.0" stroke="#eee"/>
+<text x="159.2" y="394" text-anchor="middle">0.2</text>
+<line x1="254.4" y1="376.0" x2="254.4" y2="40.0" stroke="#eee"/>
+<text x="254.4" y="394" text-anchor="middle">0.4</text>
+<line x1="349.6" y1="376.0" x2="349.6" y2="40.0" stroke="#eee"/>
+<text x="349.6" y="394" text-anchor="middle">0.6</text>
+<line x1="444.8" y1="376.0" x2="444.8" y2="40.0" stroke="#eee"/>
+<text x="444.8" y="394" text-anchor="middle">0.8</text>
+<line x1="540.0" y1="376.0" x2="540.0" y2="40.0" stroke="#eee"/>
+<text x="540.0" y="394" text-anchor="middle">1</text>
+<line x1="64.0" y1="376.0" x2="540.0" y2="376.0" stroke="#eee"/>
+<text x="56" y="380.0" text-anchor="end">0</text>
+<line x1="64.0" y1="308.8" x2="540.0" y2="308.8" stroke="#eee"/>
+<text x="56" y="312.8" text-anchor="end">0.2</text>
+<line x1="64.0" y1="241.6" x2="540.0" y2="241.6" stroke="#eee"/>
+<text x="56" y="245.6" text-anchor="end">0.4</text>
+<line x1="64.0" y1="174.4" x2="540.0" y2="174.4" stroke="#eee"/>
+<text x="56" y="178.4" text-anchor="end">0.6</text>
+<line x1="64.0" y1="107.2" x2="540.0" y2="107.2" stroke="#eee"/>
+<text x="56" y="111.2" text-anchor="end">0.8</text>
+<line x1="64.0" y1="40.0" x2="540.0" y2="40.0" stroke="#eee"/>
+<text x="56" y="44.0" text-anchor="end">1</text>
+<rect x="64" y="40" width="476" height="336" fill="none" stroke="#333"/>
+<text x="302.0" y="418" text-anchor="middle">Mean predicted probability (decile bins)</text>
+<text transform="translate(18,208.0) rotate(-90)" text-anchor="middle">Observed share vetted</text>
+<polyline points="64.0,376.0 540.0,40.0" fill="none" stroke="#bbb" stroke-width="2" stroke-dasharray="4,4"/>
+<polyline points="74.0,367.9 133.0,323.9 182.0,287.6 230.1,278.2 275.3,220.4 326.8,180.1 375.3,160.0 424.3,134.4 469.6,85.4 514.8,59.2" fill="none" stroke="#2ca02c" stroke-width="2" stroke-dasharray=""/>
+<circle cx="74.0" cy="367.9" r="10.0" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="133.0" cy="323.9" r="4.2" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="182.0" cy="287.6" r="3.0" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="230.1" cy="278.2" r="2.7" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="275.3" cy="220.4" r="2.5" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="326.8" cy="180.1" r="2.5" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="375.3" cy="160.0" r="2.6" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="424.3" cy="134.4" r="3.2" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="469.6" cy="85.4" r="4.0" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="514.8" cy="59.2" r="4.4" fill="#2ca02c" fill-opacity="0.6"/>
+<line x1="87.8" y1="66.88" x2="111.8" y2="66.88" stroke="#2ca02c" stroke-width="2.5" stroke-dasharray=""/>
+<text x="117.8" y="70.88">+both (dot area ~ papers in bin)</text>
+<line x1="87.8" y1="84.88" x2="111.8" y2="84.88" stroke="#bbb" stroke-width="2.5" stroke-dasharray="4,4"/>
+<text x="117.8" y="88.88">perfect calibration</text>
+
+</svg>
