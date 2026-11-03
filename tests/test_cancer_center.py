@@ -364,6 +364,8 @@ def test_vetted_ml_split_is_stable_and_balanced():
 def test_axis_features_parses_cached_answers(monkeypatch):
     import json
 
+    pytest.importorskip("numpy")  # the ml extra; CI installs only the api extra
+
     import polars as pl
 
     from cu_openalex.cancer_center import axes

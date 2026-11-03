@@ -20,11 +20,14 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import numpy as np
 import polars as pl
 
 from .paths import cc_target
+
+if TYPE_CHECKING:  # numpy is only needed by the ml extra
+    import numpy as np
 
 # --- Question sets ------------------------------------------------------------------
 
@@ -287,11 +290,12 @@ def score(
     split: str | None = None,
     limit: int | None = None,
     concurrency: int = 16,
+    table: str = "vetted_ml_table",
 ) -> None:
     """Score unscored papers from the vetted_ml table; resumable."""
     from .vetted_ml import state_text, table_path
 
-    t = pl.read_parquet(table_path())
+    t = pl.read_parquet(table_path(table))
     if split:
         t = t.filter(pl.col("split") == split)
     t = t.sort("pmid")
@@ -312,6 +316,8 @@ def axis_features(pmids: pl.Series, spec: str) -> np.ndarray:
     One column per yes/no probability and per option probability of every
     choice/score question, plus a ``missing`` indicator column (0-filled rows).
     """
+    import numpy as np
+
     model, version = spec.split(":")
     cache = load_cache(model, version)
     qs = QUESTION_SETS[version]
@@ -353,8 +359,9 @@ def main() -> None:
     ap.add_argument("--split", default=None, choices=["train", "val", "test"])
     ap.add_argument("--limit", type=int, default=None)
     ap.add_argument("--concurrency", type=int, default=16)
+    ap.add_argument("--table", default="vetted_ml_table")
     a = ap.parse_args()
-    score(a.model, a.version, a.split, a.limit, a.concurrency)
+    score(a.model, a.version, a.split, a.limit, a.concurrency, a.table)
 
 
 if __name__ == "__main__":

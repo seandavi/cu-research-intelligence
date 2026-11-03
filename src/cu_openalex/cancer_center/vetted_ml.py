@@ -8,7 +8,8 @@ chooses feature groups / model / threshold on validation, and reports test once.
 
 Feature groups:
 
-* ``G0`` mechanical — tenure and member type at publication, iCite research /
+* ``G0`` mechanical — tenure at publication, Full/Mentored type in effect at
+  publication (the roster's current type, from its start date), iCite research /
   clinical / human / animal / molecular scores, excluded PubMed types, cancer
   terms in topic/title, MeSH and abstract, P30, collaboration counts.
 * ``G1`` metadata — publication types, member programs, OpenAlex field and
@@ -26,13 +27,16 @@ from __future__ import annotations
 import hashlib
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import numpy as np
 import polars as pl
 
 from .paths import cc_target
 from .scoring import CANCER_TERM_REGEX
 from .vetted import latest_vetted_xlsx, vetted_pairs
+
+if TYPE_CHECKING:  # numpy/scikit-learn come with the ml extra
+    import numpy as np
 
 SEED = 20261102
 FY_MIN, FY_MAX = 2016, 2026
@@ -41,8 +45,8 @@ _EXCLUDED_TYPES = (
 )
 
 
-def table_path() -> str:
-    return cc_target("vetted_ml_table")
+def table_path(name: str = "vetted_ml_table") -> str:
+    return cc_target(name)
 
 
 def split_of(pmid: int) -> str:
@@ -51,7 +55,7 @@ def split_of(pmid: int) -> str:
     return "train" if h < 0.6 else ("val" if h < 0.8 else "test")
 
 
-def build_table() -> pl.DataFrame:
+def build_table(name: str = "vetted_ml_table") -> pl.DataFrame:
     """Assemble and persist the paper-level feature table."""
     from ..lake import pubmed_features
 
@@ -74,7 +78,11 @@ def build_table() -> pl.DataFrame:
         .min(),
         departed=pl.col("event_date").filter(pl.col("event_type") == "departed").max(),
     )
-    mt = pl.read_parquet(cc_target("membership"), columns=["member_id", "member_type"])
+    # The roster holds only each member's *current* type, effective from
+    # member_type_start_date; earlier papers have an unknown type (not Full/Mentored).
+    mt = pl.read_parquet(
+        cc_target("membership"), columns=["member_id", "member_type", "member_type_start_date"]
+    )
     x = (
         mw.join(w.select("work_id", "pd"), on="work_id")
         .join(ten, on="member_id", how="left")
@@ -83,7 +91,14 @@ def build_table() -> pl.DataFrame:
             in_ten=(pl.col("pd") >= pl.col("joined"))
             & (pl.col("departed").is_null() | (pl.col("pd") <= pl.col("departed")))
         )
-        .with_columns(core=pl.col("in_ten") & pl.col("member_type").is_in(["Full", "Mentored"]))
+        .with_columns(
+            core=pl.col("in_ten")
+            & pl.col("member_type").is_in(["Full", "Mentored"])
+            & (
+                pl.col("member_type_start_date").is_null()
+                | (pl.col("pd") >= pl.col("member_type_start_date"))
+            )
+        )
         .group_by("work_id")
         .agg(in_tenure=pl.col("in_ten").any(), core_member=pl.col("core").any())
     )
@@ -129,7 +144,7 @@ def build_table() -> pl.DataFrame:
         )
         .drop("oa_abstract")
     )
-    t.write_parquet(table_path())
+    t.write_parquet(table_path(name))
     return t
 
 
@@ -152,6 +167,7 @@ def state_text(row: dict) -> str:
 
 
 def _feature_blocks(t: pl.DataFrame, tr: np.ndarray, axes: list[str]):
+    import numpy as np
     import scipy.sparse as sp
     from sklearn.feature_extraction.text import TfidfVectorizer
     from sklearn.preprocessing import MultiLabelBinarizer
@@ -236,15 +252,18 @@ def _feature_blocks(t: pl.DataFrame, tr: np.ndarray, axes: list[str]):
     return blocks
 
 
-def run(axes: list[str] | None = None, out: str | None = None) -> pl.DataFrame:
+def run(
+    axes: list[str] | None = None, out: str | None = None, table: str = "vetted_ml_table"
+) -> pl.DataFrame:
     """Fit/select on train/val, report test once; return the validation table."""
+    import numpy as np
     import scipy.sparse as sp
     from sklearn.ensemble import HistGradientBoostingClassifier
     from sklearn.linear_model import LogisticRegression
     from sklearn.metrics import average_precision_score, precision_recall_curve, roc_auc_score
 
     axes = axes or []
-    t = pl.read_parquet(table_path())
+    t = pl.read_parquet(table_path(table))
     y = t["vet"].to_numpy().astype(int)
     sp_ = t["split"].to_numpy()
     idx = {s: np.where(sp_ == s)[0] for s in ("train", "val", "test")}
@@ -361,19 +380,23 @@ def main() -> None:
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     sub = ap.add_subparsers(dest="cmd", required=True)
-    sub.add_parser("build", help="Build the feature table (needs the lake and the vetted sheet).")
+    b = sub.add_parser(
+        "build", help="Build the feature table (needs the lake and the vetted sheet)."
+    )
+    b.add_argument("--table", default="vetted_ml_table", help="Table name under cancer_center/.")
     r = sub.add_parser("run", help="Fit/select/test (needs the 'ml' extra).")
     r.add_argument("--axes", nargs="*", default=[], help="Axis caches to add, as model:version.")
     r.add_argument("--out", default=None, help="Write the validation table here.")
+    r.add_argument("--table", default="vetted_ml_table", help="Table name under cancer_center/.")
     args = ap.parse_args()
     if args.cmd == "build":
-        t = build_table()
+        t = build_table(args.table)
         print(
             t.height,
             t.group_by("split").agg(pl.len(), pl.col("vet").mean().round(3)).sort("split").rows(),
         )
     else:
-        run(args.axes, args.out)
+        run(args.axes, args.out, args.table)
 
 
 if __name__ == "__main__":

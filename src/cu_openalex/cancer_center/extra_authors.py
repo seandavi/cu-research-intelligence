@@ -76,7 +76,10 @@ def _write_extra(raw: list[dict], s: Settings) -> pl.DataFrame:
 
 
 def build_evidence(
-    members: pl.DataFrame, through_fy: int | None = None, settings: Settings | None = None
+    members: pl.DataFrame,
+    through_fy: int | None = None,
+    settings: Settings | None = None,
+    split: str | None = None,
 ) -> pl.DataFrame | None:
     """Derive and persist vetted-evidence links; None when there's no vetted sheet.
 
@@ -90,6 +93,14 @@ def build_evidence(
     pairs = vetted_pairs(xlsx)
     if through_fy is not None:
         pairs = pairs.filter(pl.col("fy") <= through_fy)
+    if split is not None:
+        # Classifier experiments (#59): evidence from one vetted_ml split only, so
+        # the held-out papers' labels never shape member attribution.
+        from .vetted_ml import split_of
+
+        pairs = pairs.filter(
+            pl.col("pmid").cast(pl.Int64).map_elements(split_of, return_dtype=pl.Utf8) == split
+        )
     authorships = fetch_authorships(pairs["pmid"].unique().to_list(), settings)
     links = evidence_links(pairs, members, authorships, reserved=orcid_author_links(members))
     links.write_parquet(cc_target("member_evidence_links"))
@@ -97,7 +108,7 @@ def build_evidence(
 
 
 def fetch_extra_authors(
-    through_fy: int | None = None, settings: Settings | None = None
+    through_fy: int | None = None, settings: Settings | None = None, split: str | None = None
 ) -> pl.DataFrame:
     """Fetch every author carrying a roster ORCID or tied to a member by vetted
     evidence; write the curated frame."""
@@ -106,7 +117,7 @@ def fetch_extra_authors(
     orcids = sorted(set(members["orcid"].drop_nulls().to_list()))
     raw = asyncio.run(_fetch_authors("orcid", orcids, s))
     _write_extra(raw, s)  # written first: ORCID profiles are reserved in the evidence step
-    links = build_evidence(members, through_fy, s)
+    links = build_evidence(members, through_fy, s, split)
     if links is None:  # no vetted sheet here: keep the last persisted links
         links = load_evidence_links()
     if links.height:
@@ -165,9 +176,15 @@ def main() -> None:
         default=None,
         help="Use only vetted papers with report year <= this (held-out evaluation).",
     )
+    parser.add_argument(
+        "--evidence-split",
+        choices=["train", "val", "test"],
+        default=None,
+        help="Use only vetted papers in this vetted_ml split (classifier experiments).",
+    )
     args = parser.parse_args()
     s = get_settings()
-    extra = fetch_extra_authors(args.evidence_through_fy, s)
+    extra = fetch_extra_authors(args.evidence_through_fy, s, args.evidence_split)
     print(f"  extra authors (ORCID + vetted evidence): {extra.height}")
 
     con = storage.duckdb_connect(s)
