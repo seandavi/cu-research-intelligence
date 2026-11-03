@@ -16,10 +16,10 @@
 <text x="322" y="192.0" text-anchor="end">mechanical + Clef-flash</text>
 <rect x="330" y="176" width="191.4" height="24" fill="#2ca02c"/>
 <text x="527.4" y="192.0">0.846</text>
-<text x="322" y="226.0" text-anchor="end">mechanical + metadata + MeSH</text>
+<text x="322" y="226.0" text-anchor="end">mechanical + metadata</text>
 <rect x="330" y="210" width="174.0" height="24" fill="#7f7f7f"/>
 <text x="510.0" y="226.0">0.840</text>
-<text x="322" y="260.0" text-anchor="end">mechanical + metadata</text>
+<text x="322" y="260.0" text-anchor="end">mechanical + metadata + MeSH</text>
 <rect x="330" y="244" width="174.0" height="24" fill="#7f7f7f"/>
 <text x="510.0" y="260.0">0.840</text>
 <text x="322" y="294.0" text-anchor="end">mechanical + metadata + MeSH + text TF-IDF</text>

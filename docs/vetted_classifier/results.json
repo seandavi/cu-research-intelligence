@@ -1,4 +1,11 @@
 {
+  "data": {
+    "vetted_share": 0.203,
+    "abstract_coverage": 0.998,
+    "mesh_coverage": 0.799,
+    "icite_coverage": 0.997,
+    "p30_linked": 1130
+  },
   "n": {
     "table": 27743,
     "train": 16658,
@@ -85,6 +92,11 @@
       -0.005,
       -0.012,
       0.002
+    ],
+    "+both vs +Clef-flash": [
+      0.002,
+      -0.003,
+      0.006
     ]
   },
   "per_program": {
@@ -515,11 +527,11 @@
       0.846
     ],
     [
-      "G0+G1+G2",
+      "G0+G1",
       0.84
     ],
     [
-      "G0+G1",
+      "G0+G1+G2",
       0.84
     ],
     [

@@ -35,16 +35,12 @@ class ItemResult:
 def _post_chat(base_url: str, question: str, timeout: float) -> dict:
     import httpx
 
-    r = httpx.post(
-        base_url.rstrip("/") + "/api/chat", json={"question": question}, timeout=timeout
-    )
+    r = httpx.post(base_url.rstrip("/") + "/api/chat", json={"question": question}, timeout=timeout)
     r.raise_for_status()
     return r.json()
 
 
-def evaluate_item(
-    item: GoldItem, response: dict
-) -> ItemResult:
+def evaluate_item(item: GoldItem, response: dict) -> ItemResult:
     """Score one gold item against a chat response dict (pure — testable offline)."""
     queries = response.get("queries") or []
     table = response.get("table")

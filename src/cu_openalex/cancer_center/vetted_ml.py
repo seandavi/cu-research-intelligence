@@ -455,7 +455,6 @@ def _thresholds(y, p) -> dict[str, float]:
 
 def export(path: str, table: str = "vetted_ml_table") -> dict[str, float]:
     """Write the review workbook: our columns full-outer-joined to the team's sheet."""
-    import numpy as np
 
     from .axes import axis_summary
 
@@ -463,7 +462,9 @@ def export(path: str, table: str = "vetted_ml_table") -> dict[str, float]:
     p = oof_scores(t, EXPORT_AXES)
     y = t["vet"].to_numpy().astype(int)
     th = _thresholds(y, p)
-    t = t.with_columns(model_prob=pl.Series(np.round(p, 4)))
+    # Full precision: bands are compared against unrounded scores (the workbook
+    # displays 4 decimals via float_precision).
+    t = t.with_columns(model_prob=pl.Series(p))
 
     # Our attributed members per paper, "Last F (Program)".
     mem = pl.read_parquet(cc_target("members"), columns=["Member_ID", "Last_Name", "First_Name"])

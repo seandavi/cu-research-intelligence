@@ -125,7 +125,12 @@ def main() -> None:
         p, r = tp / max(tp + fp, 1), tp / max(tp + fn, 1)
         return round(p, 3), round(r, 3), round(2 * p * r / max(p + r, 1e-12), 3)
 
-    res: dict = {"n": {"table": t.height, "train": len(tr), "val": len(va), "test": len(te),
+    res: dict = {"data": {"vetted_share": round(float(y.mean()), 3),
+                          "abstract_coverage": round(float(t["abstract"].is_not_null().mean()), 3),
+                          "mesh_coverage": round(float((t["mesh_terms"].fill_null("") != "").mean()), 3),
+                          "icite_coverage": round(float(t["is_research_article"].is_not_null().mean()), 3),
+                          "p30_linked": int(t["p30"].sum())},
+                 "n": {"table": t.height, "train": len(tr), "val": len(va), "test": len(te),
                        "test_vetted": int(yt.sum()), "hard_test": int(hard.sum()),
                        "hard_test_vetted": int(yt[hard].sum())}, "test": {}, "hard": {}}
     for name, (pt, th) in scores.items():
@@ -139,7 +144,8 @@ def main() -> None:
     rng = np.random.default_rng(0)
     idx = [rng.integers(0, len(yt), len(yt)) for _ in range(2000)]
     res["bootstrap_ap_gain"] = {}
-    for a, b2 in [("+Clef-flash", "baseline"), ("+Clef", "baseline"), ("+both", "baseline"), ("+Clef", "+Clef-flash")]:
+    for a, b2 in [("+Clef-flash", "baseline"), ("+Clef", "baseline"), ("+both", "baseline"),
+                  ("+Clef", "+Clef-flash"), ("+both", "+Clef-flash")]:
         d = np.array([average_precision_score(yt[i], scores[a][0][i]) - average_precision_score(yt[i], scores[b2][0][i])
                       for i in idx])
         res["bootstrap_ap_gain"][f"{a} vs {b2}"] = [round(float(d.mean()), 3), round(float(np.percentile(d, 2.5)), 3),
@@ -212,7 +218,7 @@ def main() -> None:
     cal = res["calibration_test"]
     s.append(_poly([d["mean_predicted"] for d in cal], [d["observed"] for d in cal], COLORS["+both"]))
     for d in cal:
-        s.append(f'<circle cx="{_x(d["mean_predicted"]):.1f}" cy="{_y(d["observed"]):.1f}" r="{2 + min(8, d["n"] / 150):.1f}" '
+        s.append(f'<circle cx="{_x(d["mean_predicted"]):.1f}" cy="{_y(d["observed"]):.1f}" r="{np.sqrt(d["n"]) / 4:.1f}" '
                  f'fill="{COLORS["+both"]}" fill-opacity="0.6"/>')
     _legend(s, [("+both (dot area ~ papers in bin)", COLORS["+both"], ""), ("perfect calibration", "#bbb", "4,4")],
             _x(0.05), _y(0.92))

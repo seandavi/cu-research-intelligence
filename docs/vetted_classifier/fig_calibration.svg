@@ -30,16 +30,16 @@
 <text transform="translate(18,208.0) rotate(-90)" text-anchor="middle">Observed share vetted</text>
 <polyline points="64.0,376.0 540.0,40.0" fill="none" stroke="#bbb" stroke-width="2" stroke-dasharray="4,4"/>
 <polyline points="74.0,367.9 133.0,323.9 182.0,287.6 230.1,278.2 275.3,220.4 326.8,180.1 375.3,160.0 424.3,134.4 469.6,85.4 514.8,59.2" fill="none" stroke="#2ca02c" stroke-width="2" stroke-dasharray=""/>
-<circle cx="74.0" cy="367.9" r="10.0" fill="#2ca02c" fill-opacity="0.6"/>
-<circle cx="133.0" cy="323.9" r="4.2" fill="#2ca02c" fill-opacity="0.6"/>
-<circle cx="182.0" cy="287.6" r="3.0" fill="#2ca02c" fill-opacity="0.6"/>
-<circle cx="230.1" cy="278.2" r="2.7" fill="#2ca02c" fill-opacity="0.6"/>
-<circle cx="275.3" cy="220.4" r="2.5" fill="#2ca02c" fill-opacity="0.6"/>
-<circle cx="326.8" cy="180.1" r="2.5" fill="#2ca02c" fill-opacity="0.6"/>
-<circle cx="375.3" cy="160.0" r="2.6" fill="#2ca02c" fill-opacity="0.6"/>
-<circle cx="424.3" cy="134.4" r="3.2" fill="#2ca02c" fill-opacity="0.6"/>
-<circle cx="469.6" cy="85.4" r="4.0" fill="#2ca02c" fill-opacity="0.6"/>
-<circle cx="514.8" cy="59.2" r="4.4" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="74.0" cy="367.9" r="15.6" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="133.0" cy="323.9" r="4.5" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="182.0" cy="287.6" r="3.1" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="230.1" cy="278.2" r="2.5" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="275.3" cy="220.4" r="2.3" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="326.8" cy="180.1" r="2.1" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="375.3" cy="160.0" r="2.3" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="424.3" cy="134.4" r="3.4" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="469.6" cy="85.4" r="4.4" fill="#2ca02c" fill-opacity="0.6"/>
+<circle cx="514.8" cy="59.2" r="4.8" fill="#2ca02c" fill-opacity="0.6"/>
 <line x1="87.8" y1="66.88" x2="111.8" y2="66.88" stroke="#2ca02c" stroke-width="2.5" stroke-dasharray=""/>
 <text x="117.8" y="70.88">+both (dot area ~ papers in bin)</text>
 <line x1="87.8" y1="84.88" x2="111.8" y2="84.88" stroke="#bbb" stroke-width="2.5" stroke-dasharray="4,4"/>

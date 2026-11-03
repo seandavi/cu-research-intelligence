@@ -80,9 +80,7 @@ def _load_lake_projects(members: pl.DataFrame) -> pl.DataFrame:
     raw = reporter_projects(members["last_norm"].drop_nulls().unique().to_list())
     return raw.with_columns(
         pl.struct(["pi_names", "pi_ids"])
-        .map_elements(
-            lambda s: _parse_pis(s["pi_names"], s["pi_ids"]), return_dtype=_PIS_DTYPE
-        )
+        .map_elements(lambda s: _parse_pis(s["pi_names"], s["pi_ids"]), return_dtype=_PIS_DTYPE)
         .alias("pis")
     )
 

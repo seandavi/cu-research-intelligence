@@ -72,9 +72,7 @@ def _author_row(author: dict, target_short: str) -> dict:
         "updated_date": author.get("updated_date"),
         "created_date": author.get("created_date"),
         "affiliations_json": json.dumps(author.get("affiliations", []), separators=(",", ":")),
-        "counts_by_year_json": json.dumps(
-            author.get("counts_by_year", []), separators=(",", ":")
-        ),
+        "counts_by_year_json": json.dumps(author.get("counts_by_year", []), separators=(",", ":")),
     }
 
 

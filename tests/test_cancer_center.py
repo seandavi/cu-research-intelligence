@@ -381,3 +381,17 @@ def test_axis_features_parses_cached_answers(monkeypatch):
     assert x.shape == (2, 8)
     assert x[0, 0] == 0.1 and x[0, 3] == 0.9 and x[0, 4] == 0.9 and x[0, -1] == 0
     assert x[1, -1] == 1  # pmid 2 unscored -> missing flag
+
+
+def test_vetted_ml_band_thresholds_hold_on_unrounded_scores():
+    """Bands are applied to full-precision scores; near-tied scores must not be merged."""
+    np = pytest.importorskip("numpy")
+    pytest.importorskip("sklearn")
+    from cu_openalex.cancer_center.vetted_ml import _thresholds
+
+    y = np.array([1, 1, 0, 1, 0, 0, 0, 0, 0, 0])
+    p = np.array([0.80002, 0.79996, 0.799951, 0.7, 0.6, 0.3, 0.2, 0.1, 0.05, 0.01])
+    th = _thresholds(y, p)
+    picked = p >= th["propose"]
+    assert y[picked].mean() >= 0.9
+    assert not picked[2]  # 0.799951 stays below a 0.79996 cut-off

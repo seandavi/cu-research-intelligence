@@ -41,9 +41,21 @@ def render_markdown(
     private = ["--allow-private-network"] if ("localhost" in url or "127.0.0.1" in url) else []
     try:
         out = subprocess.run(
-            [b, "fetch", url, "--dump", "markdown", "--wait", str(wait),
-             "--timeout", str(timeout), *private],
-            capture_output=True, text=True, timeout=timeout + 20,
+            [
+                b,
+                "fetch",
+                url,
+                "--dump",
+                "markdown",
+                "--wait",
+                str(wait),
+                "--timeout",
+                str(timeout),
+                *private,
+            ],
+            capture_output=True,
+            text=True,
+            timeout=timeout + 20,
         )
         return out.stdout if out.returncode == 0 else None
     except Exception:  # noqa: BLE001
@@ -75,8 +87,11 @@ def ui_checks(base_url: str, *, bin_path: str | None = None) -> list[UICheck]:
         rendered[path] = md
         ok = expect.lower() in md.lower() and len(md) > 200
         checks.append(
-            UICheck(f"renders {path}", "pass" if ok else "fail",
-                    "" if ok else f"missing '{expect}' or too short")
+            UICheck(
+                f"renders {path}",
+                "pass" if ok else "fail",
+                "" if ok else f"missing '{expect}' or too short",
+            )
         )
 
     # Responsible-metrics presentation (stage 4): the overview/KPI surface should
@@ -85,8 +100,10 @@ def ui_checks(base_url: str, *, bin_path: str | None = None) -> list[UICheck]:
     if overview:
         has_median = "median" in overview.lower()
         checks.append(
-            UICheck("responsible metrics: median/distribution shown (overview)",
-                    "pass" if has_median else "fail",
-                    "median present" if has_median else "no 'median' on overview")
+            UICheck(
+                "responsible metrics: median/distribution shown (overview)",
+                "pass" if has_median else "fail",
+                "median present" if has_median else "no 'median' on overview",
+            )
         )
     return checks

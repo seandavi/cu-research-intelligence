@@ -42,9 +42,7 @@ def dimension_flow(
         entries = sorted(entries, key=lambda e: e.record_count)[:sample_parts]
     urls = [e.https_url for e in entries]
 
-    target = storage.parquet_target(
-        "openalex", "dimensions", name, f"{name}.parquet", settings=s
-    )
+    target = storage.parquet_target("openalex", "dimensions", name, f"{name}.parquet", settings=s)
     # In-memory DuckDB: stateless, no contention with the state DB lock.
     con = storage.duckdb_connect(s, database=":memory:")
     try:
@@ -69,9 +67,7 @@ def dimensions_flow(
     log = get_run_logger()
     s = settings or get_settings()
     names = names or list(dimensions.DIMENSIONS)
-    results = {
-        name: dimension_flow(name, sample_parts=sample_parts, settings=s) for name in names
-    }
+    results = {name: dimension_flow(name, sample_parts=sample_parts, settings=s) for name in names}
     log.info("built %d dimensions: %s", len(results), ", ".join(names))
     return results
 
