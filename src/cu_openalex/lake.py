@@ -110,3 +110,48 @@ def reporter_projects(surnames: list[str]) -> pl.DataFrame:
         ).pl()
     finally:
         con.close()
+
+
+def pubmed_features(pmids: list[int]) -> pl.DataFrame:
+    """Per-PMID PubMed + iCite + RePORTER facts for the review features (#54, #59).
+
+    One row per PMID found in ``omicidx.pubmed_article``: abstract, publication
+    types, MeSH terms; iCite's ``is_research_article`` / ``is_clinical`` / human /
+    animal / molecular-cellular (``apt``) scores; and ``p30`` — whether RePORTER
+    links the paper to the center's P30 (CA046934). Filtered in the lake to the
+    given PMIDs.
+    """
+    from cdsci.lake import lake_connect
+
+    con = lake_connect(read_only=True)
+    try:
+        pm = pl.DataFrame({"pmid": sorted(set(pmids))}, schema={"pmid": pl.Int64})
+        con.register("_pm", pm.to_arrow())
+        return con.execute(
+            """
+            WITH pa AS (
+                SELECT a.pmid::BIGINT AS pmid, any_value(a.abstract) AS abstract,
+                       any_value(a.publication_types) AS publication_types,
+                       any_value(a.mesh_terms) AS mesh_terms
+                FROM lake.omicidx.pubmed_article a JOIN _pm ON a.pmid::BIGINT = _pm.pmid
+                GROUP BY 1
+            ),
+            ic AS (
+                SELECT m.pmid, any_value(m.is_research_article) AS is_research_article,
+                       any_value(m.is_clinical) AS is_clinical, any_value(m.human) AS human,
+                       any_value(m.animal) AS animal, any_value(m.apt) AS apt
+                FROM lake.icite.metadata m JOIN _pm USING (pmid) GROUP BY 1
+            ),
+            p30 AS (
+                SELECT DISTINCT p.pmid FROM lake.reporter.publink p JOIN _pm USING (pmid)
+                WHERE p.project_number ILIKE '%CA046934%'
+            )
+            SELECT _pm.pmid, pa.abstract, pa.publication_types, pa.mesh_terms,
+                   ic.is_research_article, ic.is_clinical, ic.human, ic.animal, ic.apt,
+                   (p30.pmid IS NOT NULL) AS p30
+            FROM _pm LEFT JOIN pa USING (pmid) LEFT JOIN ic USING (pmid)
+                     LEFT JOIN p30 USING (pmid)
+            """
+        ).pl()
+    finally:
+        con.close()
