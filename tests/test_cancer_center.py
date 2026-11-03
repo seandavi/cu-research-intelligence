@@ -336,3 +336,48 @@ def test_extra_authors_keep_persisted_evidence_without_sheet(monkeypatch):
     out = ea.fetch_extra_authors(settings=object())
     assert ("openalex", ["A9"]) in calls
     assert [a["id"] for a in out] == ["https://openalex.org/A9"]
+
+
+def test_axes_v1_question_text_is_frozen():
+    """Cached answers are keyed by question-set version: edit a copy as v2, never v1."""
+    import hashlib
+    import json
+
+    from cu_openalex.cancer_center.axes import V1
+
+    digest = hashlib.sha256(json.dumps(V1, sort_keys=True).encode()).hexdigest()[:16]
+    assert digest == "760d642787f12009"
+    assert len(V1) <= 64  # Clef's per-call question limit
+
+
+def test_vetted_ml_split_is_stable_and_balanced():
+    from cu_openalex.cancer_center.vetted_ml import split_of
+
+    assert split_of(41137732) == split_of(41137732)
+    counts = {"train": 0, "val": 0, "test": 0}
+    for pmid in range(30_000_000, 30_020_000):
+        counts[split_of(pmid)] += 1
+    assert abs(counts["train"] / 20_000 - 0.6) < 0.02
+    assert abs(counts["val"] / 20_000 - 0.2) < 0.02
+
+
+def test_axis_features_parses_cached_answers(monkeypatch):
+    import json
+
+    pytest.importorskip("numpy")  # the ml extra; CI installs only the api extra
+
+    import polars as pl
+
+    from cu_openalex.cancer_center import axes
+
+    ans = {
+        "nci_counts": {"type": "noul", "noul": 0.9},
+        "cancer_focus": {"type": "score", "score": 2.5, "probabilities": {"0": 0.1, "3": 0.9}},
+    }
+    cache = pl.DataFrame({"pmid": [1], "answers": [json.dumps(ans)], "input_tokens": [10]})
+    monkeypatch.setattr(axes, "load_cache", lambda m, v: cache)
+    x = axes.axis_features(pl.Series([1, 2]), "clef-flash:v1-core")
+    # columns: cancer_focus=0..3, nci_counts, bio_cancer_process, cancer_control, missing
+    assert x.shape == (2, 8)
+    assert x[0, 0] == 0.1 and x[0, 3] == 0.9 and x[0, 4] == 0.9 and x[0, -1] == 0
+    assert x[1, -1] == 1  # pmid 2 unscored -> missing flag

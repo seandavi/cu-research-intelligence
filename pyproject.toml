@@ -26,6 +26,10 @@ dependencies = [
 cu-openalex = "cu_openalex.flows.pipeline:main"
 
 [project.optional-dependencies]
+# Vetted-publication classifier experiments (#59): cancer_center.vetted_ml.
+ml = [
+    "scikit-learn>=1.5",
+]
 dashboard = [
     "google-genai>=2.9.0",
     "networkx>=3.6.1",
