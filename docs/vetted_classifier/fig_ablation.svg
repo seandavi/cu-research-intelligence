@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="680" height="366" font-family="Helvetica, Arial, sans-serif" font-size="12">
+<rect width="680" height="366" fill="white"/>
+<text x="340.0" y="22" text-anchor="middle" font-size="14" font-weight="bold">Validation AP by feature set (best model each)</text>
+<text x="322" y="56.0" text-anchor="end">mechanical + metadata + MeSH + Clef  +  Clef-flash</text>
+<rect x="330" y="40" width="249.4" height="24" fill="#2ca02c"/>
+<text x="585.4" y="56.0">0.866</text>
+<text x="322" y="90.0" text-anchor="end">mechanical + metadata + MeSH + Clef</text>
+<rect x="330" y="74" width="246.5" height="24" fill="#2ca02c"/>
+<text x="582.5" y="90.0">0.865</text>
+<text x="322" y="124.0" text-anchor="end">mechanical + metadata + MeSH + Clef-flash</text>
+<rect x="330" y="108" width="240.7" height="24" fill="#2ca02c"/>
+<text x="576.7" y="124.0">0.863</text>
+<text x="322" y="158.0" text-anchor="end">mechanical + Clef</text>
+<rect x="330" y="142" width="203.0" height="24" fill="#2ca02c"/>
+<text x="539.0" y="158.0">0.850</text>
+<text x="322" y="192.0" text-anchor="end">mechanical + Clef-flash</text>
+<rect x="330" y="176" width="191.4" height="24" fill="#2ca02c"/>
+<text x="527.4" y="192.0">0.846</text>
+<text x="322" y="226.0" text-anchor="end">mechanical + metadata</text>
+<rect x="330" y="210" width="174.0" height="24" fill="#7f7f7f"/>
+<text x="510.0" y="226.0">0.840</text>
+<text x="322" y="260.0" text-anchor="end">mechanical + metadata + MeSH</text>
+<rect x="330" y="244" width="174.0" height="24" fill="#7f7f7f"/>
+<text x="510.0" y="260.0">0.840</text>
+<text x="322" y="294.0" text-anchor="end">mechanical + metadata + MeSH + text TF-IDF</text>
+<rect x="330" y="278" width="150.8" height="24" fill="#7f7f7f"/>
+<text x="486.8" y="294.0">0.832</text>
+<text x="322" y="328.0" text-anchor="end">mechanical</text>
+<rect x="330" y="312" width="72.5" height="24" fill="#7f7f7f"/>
+<text x="408.5" y="328.0">0.805</text>
+<text x="330" y="356" fill="#555">Bars start at AP 0.78. Grey: without Clef answers; green: with.</text>
+</svg>

@@ -29,6 +29,7 @@ cu-openalex = "cu_openalex.flows.pipeline:main"
 # Vetted-publication classifier experiments (#59): cancer_center.vetted_ml.
 ml = [
     "scikit-learn>=1.5",
+    "xlsxwriter>=3.2",
 ]
 dashboard = [
     "google-genai>=2.9.0",

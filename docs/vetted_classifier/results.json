@@ -1,0 +1,554 @@
+{
+  "data": {
+    "vetted_share": 0.203,
+    "abstract_coverage": 0.998,
+    "mesh_coverage": 0.799,
+    "icite_coverage": 0.997,
+    "p30_linked": 1130
+  },
+  "n": {
+    "table": 27743,
+    "train": 16658,
+    "val": 5531,
+    "test": 5554,
+    "test_vetted": 1089,
+    "hard_test": 988,
+    "hard_test_vetted": 166
+  },
+  "test": {
+    "baseline": {
+      "auc": 0.941,
+      "ap": 0.836,
+      "P": 0.775,
+      "R": 0.758,
+      "F1": 0.766,
+      "threshold": 0.431
+    },
+    "+Clef-flash": {
+      "auc": 0.951,
+      "ap": 0.854,
+      "P": 0.825,
+      "R": 0.749,
+      "F1": 0.785,
+      "threshold": 0.533
+    },
+    "+Clef": {
+      "auc": 0.949,
+      "ap": 0.849,
+      "P": 0.81,
+      "R": 0.782,
+      "F1": 0.796,
+      "threshold": 0.443
+    },
+    "+both": {
+      "auc": 0.953,
+      "ap": 0.856,
+      "P": 0.8,
+      "R": 0.803,
+      "F1": 0.802,
+      "threshold": 0.4
+    },
+    "mechanical rules": {
+      "P": 0.731,
+      "R": 0.688,
+      "F1": 0.709
+    }
+  },
+  "hard": {
+    "baseline": {
+      "P": 0.511,
+      "R": 0.404
+    },
+    "+Clef-flash": {
+      "P": 0.678,
+      "R": 0.494
+    },
+    "+Clef": {
+      "P": 0.653,
+      "R": 0.578
+    },
+    "+both": {
+      "P": 0.629,
+      "R": 0.633
+    }
+  },
+  "bootstrap_ap_gain": {
+    "+Clef-flash vs baseline": [
+      0.018,
+      0.007,
+      0.029
+    ],
+    "+Clef vs baseline": [
+      0.013,
+      0.002,
+      0.024
+    ],
+    "+both vs baseline": [
+      0.02,
+      0.008,
+      0.032
+    ],
+    "+Clef vs +Clef-flash": [
+      -0.005,
+      -0.012,
+      0.002
+    ],
+    "+both vs +Clef-flash": [
+      0.002,
+      -0.003,
+      0.006
+    ]
+  },
+  "per_program": {
+    "Cancer Prevention & Control": {
+      "n": 2206,
+      "vetted": 353,
+      "baseline": {
+        "P": 0.766,
+        "R": 0.686
+      },
+      "+Clef-flash": {
+        "P": 0.797,
+        "R": 0.688
+      },
+      "+both": {
+        "P": 0.765,
+        "R": 0.737
+      }
+    },
+    "Developmental Therapeutics": {
+      "n": 1493,
+      "vetted": 478,
+      "baseline": {
+        "P": 0.829,
+        "R": 0.874
+      },
+      "+Clef-flash": {
+        "P": 0.885,
+        "R": 0.854
+      },
+      "+both": {
+        "P": 0.869,
+        "R": 0.887
+      }
+    },
+    "Molecular & Cellular Oncology": {
+      "n": 970,
+      "vetted": 281,
+      "baseline": {
+        "P": 0.77,
+        "R": 0.751
+      },
+      "+Clef-flash": {
+        "P": 0.834,
+        "R": 0.786
+      },
+      "+both": {
+        "P": 0.814,
+        "R": 0.843
+      }
+    },
+    "Tumor-Host Interactions": {
+      "n": 1101,
+      "vetted": 284,
+      "baseline": {
+        "P": 0.79,
+        "R": 0.81
+      },
+      "+Clef-flash": {
+        "P": 0.833,
+        "R": 0.775
+      },
+      "+both": {
+        "P": 0.798,
+        "R": 0.82
+      }
+    }
+  },
+  "calibration_test": [
+    {
+      "bin": 0.0,
+      "n": 3877,
+      "mean_predicted": 0.021,
+      "observed": 0.024
+    },
+    {
+      "bin": 0.1,
+      "n": 329,
+      "mean_predicted": 0.145,
+      "observed": 0.155
+    },
+    {
+      "bin": 0.2,
+      "n": 152,
+      "mean_predicted": 0.248,
+      "observed": 0.263
+    },
+    {
+      "bin": 0.3,
+      "n": 103,
+      "mean_predicted": 0.349,
+      "observed": 0.291
+    },
+    {
+      "bin": 0.4,
+      "n": 82,
+      "mean_predicted": 0.444,
+      "observed": 0.463
+    },
+    {
+      "bin": 0.5,
+      "n": 72,
+      "mean_predicted": 0.552,
+      "observed": 0.583
+    },
+    {
+      "bin": 0.6,
+      "n": 84,
+      "mean_predicted": 0.654,
+      "observed": 0.643
+    },
+    {
+      "bin": 0.7,
+      "n": 185,
+      "mean_predicted": 0.757,
+      "observed": 0.719
+    },
+    {
+      "bin": 0.8,
+      "n": 304,
+      "mean_predicted": 0.852,
+      "observed": 0.865
+    },
+    {
+      "bin": 0.9,
+      "n": 366,
+      "mean_predicted": 0.947,
+      "observed": 0.943
+    }
+  ],
+  "question_auc_train": [
+    [
+      "nci_counts",
+      0.789
+    ],
+    [
+      "disease_focus=cancer",
+      0.77
+    ],
+    [
+      "cancer_focus=3",
+      0.767
+    ],
+    [
+      "cancer_focus=2",
+      0.744
+    ],
+    [
+      "cancer_control",
+      0.696
+    ],
+    [
+      "cc_treatment",
+      0.69
+    ],
+    [
+      "bio_microenv_metastasis",
+      0.689
+    ],
+    [
+      "fit_dt",
+      0.67
+    ],
+    [
+      "cancer_focus=1",
+      0.661
+    ],
+    [
+      "fit_cpc",
+      0.647
+    ],
+    [
+      "fit_mco",
+      0.641
+    ],
+    [
+      "bio_signaling",
+      0.63
+    ],
+    [
+      "bio_cancer_process",
+      0.63
+    ],
+    [
+      "cc_diagnosis",
+      0.625
+    ],
+    [
+      "fit_thi",
+      0.599
+    ],
+    [
+      "bio_cell_cycle",
+      0.599
+    ],
+    [
+      "cc_screening",
+      0.582
+    ],
+    [
+      "cc_survivorship",
+      0.575
+    ],
+    [
+      "bio_genome_integrity",
+      0.569
+    ],
+    [
+      "organism=human",
+      0.568
+    ],
+    [
+      "study_system=in_vitro",
+      0.564
+    ],
+    [
+      "bio_gene_regulation",
+      0.563
+    ],
+    [
+      "bio_drug_development",
+      0.56
+    ],
+    [
+      "cancer_site=multiple",
+      0.555
+    ],
+    [
+      "bio_tumor_immunity",
+      0.549
+    ],
+    [
+      "study_system=biospecimens",
+      0.537
+    ],
+    [
+      "cc_palliative",
+      0.535
+    ],
+    [
+      "cc_clinical_trial",
+      0.534
+    ],
+    [
+      "bio_radiation",
+      0.533
+    ],
+    [
+      "study_system=patients",
+      0.527
+    ],
+    [
+      "organism=rodent",
+      0.503
+    ],
+    [
+      "study_system=animal",
+      0.498
+    ],
+    [
+      "study_system=structural",
+      0.489
+    ],
+    [
+      "study_system=veterinary",
+      0.486
+    ],
+    [
+      "bio_stem_development",
+      0.486
+    ],
+    [
+      "disease_focus=infectious",
+      0.482
+    ],
+    [
+      "disease_focus=neuro_psych",
+      0.479
+    ],
+    [
+      "cancer_site=breast",
+      0.477
+    ],
+    [
+      "study_system=computational",
+      0.474
+    ],
+    [
+      "bio_carcinogenesis",
+      0.473
+    ],
+    [
+      "organism=model_other",
+      0.473
+    ],
+    [
+      "bio_structural",
+      0.471
+    ],
+    [
+      "cancer_site=skin",
+      0.454
+    ],
+    [
+      "cc_prevention_risk",
+      0.449
+    ],
+    [
+      "cancer_site=gyn",
+      0.442
+    ],
+    [
+      "cancer_site=sarcoma",
+      0.44
+    ],
+    [
+      "cancer_site=gi",
+      0.438
+    ],
+    [
+      "cancer_site=blood",
+      0.436
+    ],
+    [
+      "disease_focus=metabolic",
+      0.434
+    ],
+    [
+      "disease_focus=none",
+      0.427
+    ],
+    [
+      "disease_focus=pulmonary",
+      0.425
+    ],
+    [
+      "organism=companion",
+      0.424
+    ],
+    [
+      "organism=microbe",
+      0.422
+    ],
+    [
+      "cancer_site=lung",
+      0.417
+    ],
+    [
+      "disease_focus=cardiovascular",
+      0.414
+    ],
+    [
+      "cancer_site=head_neck",
+      0.401
+    ],
+    [
+      "bio_metabolism",
+      0.4
+    ],
+    [
+      "cancer_site=gu",
+      0.397
+    ],
+    [
+      "cc_health_services",
+      0.394
+    ],
+    [
+      "organism=none",
+      0.394
+    ],
+    [
+      "cc_colorado_populations",
+      0.388
+    ],
+    [
+      "cancer_site=brain",
+      0.383
+    ],
+    [
+      "bio_immunology",
+      0.361
+    ],
+    [
+      "disease_focus=immune",
+      0.357
+    ],
+    [
+      "study_system=qualitative",
+      0.349
+    ],
+    [
+      "study_system=review",
+      0.339
+    ],
+    [
+      "disease_focus=other",
+      0.264
+    ],
+    [
+      "cancer_site=none",
+      0.258
+    ],
+    [
+      "cancer_focus=0",
+      0.223
+    ]
+  ],
+  "ablation_val_ap": [
+    [
+      "G0+G1+G2+all AX",
+      0.866
+    ],
+    [
+      "G0+G1+G2+AX[clef:v1]",
+      0.865
+    ],
+    [
+      "G0+G1+G2+AX[clef-flash:v1]",
+      0.863
+    ],
+    [
+      "G0+AX[clef:v1]",
+      0.85
+    ],
+    [
+      "G0+AX[clef-flash:v1]",
+      0.846
+    ],
+    [
+      "G0+G1",
+      0.84
+    ],
+    [
+      "G0+G1+G2",
+      0.84
+    ],
+    [
+      "G0+G1+G2+G3",
+      0.832
+    ],
+    [
+      "G0",
+      0.805
+    ],
+    [
+      "AX[clef:v1]",
+      0.599
+    ],
+    [
+      "AX[clef-flash:v1]",
+      0.594
+    ]
+  ]
+}
