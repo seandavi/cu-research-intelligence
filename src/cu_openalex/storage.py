@@ -86,7 +86,7 @@ def dataset_has_files(*parts: str, settings: Settings | None = None) -> bool:
         if s.r2_endpoint_url:
             opts["client_kwargs"] = {"endpoint_url": s.r2_endpoint_url}
         fs = fsspec.filesystem("s3", **opts)
-        return bool(fs.glob(f"{base[len('s3://') :]}/{suffix}/**/*.parquet"))
+        return bool(fs.glob(f"{base[len('s3://'):]}/{suffix}/**/*.parquet"))
     raise ValueError(f"Unsupported storage_base_uri scheme: {base!r}")
 
 
@@ -110,7 +110,7 @@ def clear_dataset(*parts: str, settings: Settings | None = None) -> None:
         if s.r2_endpoint_url:
             opts["client_kwargs"] = {"endpoint_url": s.r2_endpoint_url}  # type: ignore[assignment]
         fs = fsspec.filesystem("s3", **opts)
-        path = f"{base[len('s3://') :]}/{suffix}"
+        path = f"{base[len('s3://'):]}/{suffix}"
         if fs.exists(path):
             fs.rm(path, recursive=True)
     else:

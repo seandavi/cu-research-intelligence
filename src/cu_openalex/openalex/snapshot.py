@@ -79,7 +79,7 @@ def s3_to_https(s3_url: str, *, bucket: str) -> str:
     prefix = f"s3://{bucket}/"
     if not s3_url.startswith(prefix):
         raise ValueError(f"Unexpected snapshot URL {s3_url!r} (bucket {bucket!r})")
-    return f"https://{bucket}.s3.amazonaws.com/{s3_url[len(prefix) :]}"
+    return f"https://{bucket}.s3.amazonaws.com/{s3_url[len(prefix):]}"
 
 
 def manifest_url(entity: str, *, settings: Settings | None = None) -> str:

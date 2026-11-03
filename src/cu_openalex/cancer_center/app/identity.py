@@ -67,12 +67,14 @@ async def ensure_user(
         user_id, resolved_member = row[0], row[1]
         if resolved_member is not None:
             await con.execute(
-                "INSERT INTO user_role (user_id, role) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                "INSERT INTO user_role (user_id, role) VALUES (%s, %s) "
+                "ON CONFLICT DO NOTHING",
                 (user_id, R.MEMBER),
             )
         if email.lower() in cfg.admin_emails:
             await con.execute(
-                "INSERT INTO user_role (user_id, role) VALUES (%s, %s) ON CONFLICT DO NOTHING",
+                "INSERT INTO user_role (user_id, role) VALUES (%s, %s) "
+                "ON CONFLICT DO NOTHING",
                 (user_id, R.ADMIN),
             )
     return await get_user(pool, user_id)

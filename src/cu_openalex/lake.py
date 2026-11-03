@@ -29,7 +29,9 @@ def _sql_norm(expr: str) -> str:
     )
 
 
-def icite_crosswalks(dois: list[str], pmids: list[str]) -> tuple[pl.DataFrame, pl.DataFrame]:
+def icite_crosswalks(
+    dois: list[str], pmids: list[str]
+) -> tuple[pl.DataFrame, pl.DataFrame]:
     """Return ``(doi_pmid, rcr)`` crosswalks from ``lake.icite.metadata``.
 
     Limited to the cohort's ``dois`` (bare, lowercased) and ``pmids`` — iCite is

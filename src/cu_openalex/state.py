@@ -192,9 +192,9 @@ def extra_author_ids(settings: Settings | None = None) -> list[str]:
 def count_new_authors(con: duckdb.DuckDBPyConnection, run_date: _dt.date) -> int:
     """How many authors were first seen on ``run_date`` (for the backfill warning)."""
     return int(
-        con.execute("SELECT count(*) FROM authors WHERE first_seen_run = ?", [run_date]).fetchone()[
-            0
-        ]
+        con.execute(
+            "SELECT count(*) FROM authors WHERE first_seen_run = ?", [run_date]
+        ).fetchone()[0]
     )
 
 
@@ -219,7 +219,9 @@ def ingest_raw_works_part(
     ``work_id, updated_date, raw_json``. Requires ``target_authors``. Skips
     writing a file when the part has no CU works. Returns rows captured.
     """
-    con.execute(f"CREATE OR REPLACE TEMP TABLE _raw AS {snapshot.works_raw_scan_sql([part_url])}")
+    con.execute(
+        f"CREATE OR REPLACE TEMP TABLE _raw AS {snapshot.works_raw_scan_sql([part_url])}"
+    )
     n = int(con.execute("SELECT count(*) FROM _raw").fetchone()[0])
     if n:
         target = storage.parquet_target(
@@ -252,14 +254,18 @@ def curate_works(
     target = storage.parquet_target("openalex", "works", settings=s)
     storage.clear_dataset("openalex", "works", settings=s)
     sql = snapshot.works_curate_sql(raw_works_glob(s))
-    con.execute(f"COPY ({sql}) TO '{target}' (FORMAT parquet, PARTITION_BY (publication_year))")
+    con.execute(
+        f"COPY ({sql}) TO '{target}' (FORMAT parquet, PARTITION_BY (publication_year))"
+    )
     n = con.execute(f"SELECT count(*) FROM read_parquet('{target}/**/*.parquet')").fetchone()[0]
     return target, int(n)
 
 
 def get_watermark(con: duckdb.DuckDBPyConnection, entity: str) -> _dt.date | None:
     """Return the stored watermark date for ``entity``, or None if never set."""
-    row = con.execute("SELECT watermark FROM snapshot_state WHERE entity = ?", [entity]).fetchone()
+    row = con.execute(
+        "SELECT watermark FROM snapshot_state WHERE entity = ?", [entity]
+    ).fetchone()
     return row[0] if row else None
 
 

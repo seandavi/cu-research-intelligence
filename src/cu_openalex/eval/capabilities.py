@@ -122,18 +122,17 @@ def capability_coverage(base_url: str, *, timeout: float = 30.0) -> list[Check]:
     # R3 — fiscal-year windows. meta exposes calendar defaults only today.
     has_fy = field_present("/api/meta", "default_fiscal_year")
     checks.append(
-        Check(
-            "R3 fiscal-year windows",
-            "present" if has_fy else "absent",
-            "meta exposes calendar-year window only" if not has_fy else "",
-        )
+        Check("R3 fiscal-year windows", "present" if has_fy else "absent",
+              "meta exposes calendar-year window only" if not has_fy else "")
     )
 
     # R1/R2 — dataset provenance / reportable mode.
     has_mode = field_present("/api/meta", "dataset_modes") or field_present(
         "/api/meta", "reportable"
     )
-    checks.append(Check("R1/R2 provenance + reportable mode", "present" if has_mode else "absent"))
+    checks.append(
+        Check("R1/R2 provenance + reportable mode", "present" if has_mode else "absent")
+    )
 
     # R12 — editable profiles (backend). PUT /api/profile gated => 401/405, not 404.
     code = status_of("/api/profile/1", (200,))
@@ -152,8 +151,7 @@ def capability_coverage(base_url: str, *, timeout: float = 30.0) -> list[Check]:
 
     # R8 — iCite translational metrics (APT / cited-by-clinical). Not built yet.
     has_apt = field_present("/api/kpi", "apt") or field_present("/api/kpi", "cited_by_clinical")
-    checks.append(
-        Check("R8 translational metrics (iCite APT/clinical)", "present" if has_apt else "absent")
-    )
+    checks.append(Check("R8 translational metrics (iCite APT/clinical)",
+                        "present" if has_apt else "absent"))
 
     return checks

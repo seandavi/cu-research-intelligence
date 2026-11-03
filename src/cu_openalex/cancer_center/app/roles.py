@@ -15,4 +15,6 @@ LIBRARIAN = "librarian"  # curate catchment search terms / candidate lists
 LEADERSHIP = "leadership"  # cross-program views, exports
 ADMIN = "admin"  # role/identity administration, everything
 
-ROLES: frozenset[str] = frozenset({MEMBER, LIAISON, PROGRAM_LEADER, LIBRARIAN, LEADERSHIP, ADMIN})
+ROLES: frozenset[str] = frozenset(
+    {MEMBER, LIAISON, PROGRAM_LEADER, LIBRARIAN, LEADERSHIP, ADMIN}
+)

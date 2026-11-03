@@ -60,7 +60,9 @@ MAX_PLAUSIBLE_WORKS = 2000
 MAX_PLAUSIBLE_WORKS_ORCID = 5000
 
 
-def _author_program_map(crosswalk: pl.DataFrame, links: pl.DataFrame | None = None) -> pl.DataFrame:
+def _author_program_map(
+    crosswalk: pl.DataFrame, links: pl.DataFrame | None = None
+) -> pl.DataFrame:
     """One row per resolved author_id -> (member_id, program, confidence, method).
 
     ``links`` (``Member_ID, author_id, method``) adds a member's other author_ids,
